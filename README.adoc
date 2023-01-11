@@ -33,6 +33,7 @@ There should be at least one site present, the monitoredDoors are for alarm inte
 At present the monitored doors and openable doors fields aren't used by the API, but will be in the future.
 
 The departments are currently required, although I will be looking to make this more flexible:
+
  - Staff are assumed to carry fobs and not be deactivated
  - Customers are assumed to carry fobs but have them deactivated on leaving
  - Visitors are assumed to be issued a fob by security/reception
