@@ -43,11 +43,13 @@ func run(sites []*net2.Site, apiPort int, logger *zerolog.Logger) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Unable to start sites")
 	}
-	web := api.NewWeb(siteManager, logger)
-	go web.Start(apiPort)
-	<-sigc
-	log.Info().Msg("Shutting down")
-	web.Quit()
+	ws := api.Server{
+		Sites: siteManager,
+	}
+	ws.Init(apiPort, ws.GetRoutes())
+	if err = ws.Run(); err != nil {
+		log.Error().Err(err).Msg("error running web server")
+	}
 	log.Info().Msg("Exiting.")
 }
 
