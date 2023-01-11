@@ -1,0 +1,78 @@
+= Net2 API
+
+This project was born out of the annoyance with having to use the default client for lots of admin functionality and the want to automate things further.  At my job we made extensive use of Net2 and the C# API to automate things, but none of us were very good with C# so the integration was minimal and being c# it had to run on a Windows machine, which obviously Net2 does have to run on a Windows machine too, with multiple sites using distinct instances there was also a need to amalgamate them into a single entity from a user point of view.  So in my spare time I bodged this project together, it's intended to be used with an authenticated frontend and kept behind a firewall as there is no authentication.
+
+As this was developed with a specific workplace in mind, this does make a certain number of assumptions about how its intended to be used, but I hope they're generic enough to make this of use to others.
+
+== Requirements
+Paxton did develop a REST API, but do require you to get an integration licence to make use of this, so you would need to https://www.paxton-access.com/integrating-with-paxton/how-to-integrate-with-net2/[register with them] to get this.
+
+A dockerfile is provided and is very easy to build a static go binary if you'd prefer. +
+This can run on any OS supported by containers or Go.  +
+The proxy will need access to the nginx API port on the Net2 server +
+A Net2 operator will need to be created with appropriate permissions
+
+== Features
+
+ - Connect to multiples sites
+ - Listing
+   * Access Levels
+   * Departments
+   * Doors
+   * Users with various predefined categories
+ - Open/Close doors
+ - Sequence multiple doors
+ - Basic user editing
+
+== Configuration
+
+At the minute the config path is not configurable, it will look for config.yml in the working directory, for the dockerfile provided this is /.
+
+There should be at least one site present, the monitoredDoors are for alarm integration and are optional, openable doors are optional.
+
+At present the monitored doors and openable doors fields aren't used by the API, but will be in the future.
+
+The departments are currently required, although I will be looking to make this more flexible:
+ - Staff are assumed to carry fobs and not be deactivated
+ - Customers are assumed to carry fobs but have them deactivated on leaving
+ - Visitors are assumed to be issued a fob by security/reception
+ - Contractors are assumed to be issued a fob by security/reception
+ - Cleaners are assumed to be issued a fob by security/reception
+
+The main differentiation here are for being able to easily distinguish between the groups.
+
+[source,yaml]
+----
+apiport: <Defaults to 8000, optional>
+clientid: <Client ID issued by Paxton>
+sites:
+  - id: <numeric ID for the site>
+    name: <Human readable name for the site>
+    ip: <IP Address or hostname of the net2 server>
+    username: <Net2 Operator username>
+    password: <Net2 Operator password>
+    staffDepartmentPrefix: Staff
+    cleaningDepartmentPrefix: Cleaners
+    contractorDepartmentsPrefix: Contractors
+    visitorDepartmentPrefix: Visitors
+    customerDepartmentPrefix: Customers
+    cancelledDepartmentPrefix: Cancelled
+    localIDField: <Name of field in Net2 used to associated with internal system, optional>
+    monitoredDoors:
+      - id: <door address>
+        doorName: <Reception>
+        zoneName: <Alarm zone name, human readable>
+    openableDoors:
+      - name: <Door name>
+        sequence:
+          - id: <door address>>
+      - name: <Interlocked door>
+        sequence:
+          - id: <first door address>
+            duration: 45s
+          - id: <second door address>
+----
+
+== Contributions
+
+Happy to accept contributions and issues, but as this is in use at my workplace, some features may not be accepted if they make the proxy too specific.
