@@ -5,7 +5,7 @@ This project was born out of the annoyance with having to use the default client
 As this was developed with a specific workplace in mind, this does make a certain number of assumptions about how its intended to be used, but I hope they're generic enough to make this of use to others.
 
 == Requirements
-Paxton did develop a REST API, but do require you to get an integration licence to make use of this, so you would need to https://www.paxton-access.com/integrating-with-paxton/how-to-integrate-with-net2/[register with them] to get this.
+The Paxton REST API requires you to get an integration licence to make use of this, so you would need to https://www.paxton-access.com/integrating-with-paxton/how-to-integrate-with-net2/[register with them] to get this.
 
 A dockerfile is provided and is very easy to build a static go binary if you'd prefer. +
 This can run on any OS supported by containers or Go.  +
