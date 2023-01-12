@@ -342,6 +342,7 @@ func (s *Site) UpdateUserNameAndExpiryAndAccessLevel(userid int, firstname strin
 func (s *Site) UpdateAll() {
 	log.Debug().Str("Site", s.Name).Msg("Starting full update")
 	var err error
+	start := time.Now()
 	err = s.UpdateAccessLevels()
 	if err != nil {
 		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating access levels")
@@ -366,6 +367,8 @@ func (s *Site) UpdateAll() {
 	} else {
 		log.Debug().Str("Site", s.Name).Msg("Updated users")
 	}
+	total := time.Now().Sub(start).Milliseconds()
+	log.Debug().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update completed")
 	s.LastPolled = time.Now()
 }
 
