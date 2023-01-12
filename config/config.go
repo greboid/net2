@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"gopkg.in/yaml.v3"
 	"os"
 )
@@ -24,9 +25,15 @@ func LoadConfig(file string) (*Config, error) {
 	if config.APIPort == 0 {
 		config.APIPort = 8000
 	}
+	if config.ClientID == "" {
+		return nil, errors.New("clientid is required")
+	}
 	for index := range config.Sites {
 		if config.Sites[index].Port == 0 {
 			config.Sites[index].Port = 8080
+		}
+		if config.Sites[index].LocalIDField == "" {
+			return nil, errors.New("localIDField is required for site: " + config.Sites[index].Name)
 		}
 	}
 	return config, nil
