@@ -11,8 +11,8 @@ import (
 )
 
 type MessageResponse struct {
-	Error   string
-	Message string
+	Error   string `json:"message,omitempty"`
+	Message string `json:"error,omitempty"`
 }
 
 type UpdateUserData struct {
@@ -50,10 +50,9 @@ func (s *Server) GetRoutes() *chi.Mux {
 			r.Get("/now", s.updateNow)
 			r.Get("/trigger", s.update)
 		})
-		r.Route("/Sites", func(r chi.Router) {
+		r.Route("/sites", func(r chi.Router) {
 			r.Get("/", s.getSites)
-			r.Route("/{siteID:[0-9]+}", func(r chi.Router) {
-				r.With(validateSiteID)
+			r.With(s.validateSiteID).Route("/{siteID:[0-9]+}", func(r chi.Router) {
 				r.Get("/", s.getSite)
 				r.Get("/uptodate", s.getUpToDate)
 				r.Get("/unknownTokens", s.getUnknownTokens)
@@ -66,8 +65,7 @@ func (s *Server) GetRoutes() *chi.Mux {
 				r.Route("/doors", func(r chi.Router) {
 					r.Get("/", s.getDoors)
 					r.Post("/sequence", s.sequenceDoors)
-					r.Route("/{doorID:[0-9]+}", func(r chi.Router) {
-						r.With(validateDoorID)
+					r.With(s.validateDoorID).Route("/{doorID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getDoor)
 						r.Post("/open", s.openDoor)
 						r.Post("/close", s.closeDoor)
@@ -81,8 +79,7 @@ func (s *Server) GetRoutes() *chi.Mux {
 					r.Get("/activestafftoday", s.getActiveStaffToday)
 					r.Get("/activevisitors", s.getActiveVisitors)
 					r.Get("/activevisitorstoday", s.getActiveVisitorsToday)
-					r.Route("/{userID:[0-9]+}", func(r chi.Router) {
-						r.With(validateUserID)
+					r.With(s.validateUserID).Route("/{userID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getUser)
 						r.Get("/picture", s.getUserPicture)
 						r.Post("/resetantipassback", s.resetAntiPassback)
@@ -103,23 +100,55 @@ func (s *Server) GetRoutes() *chi.Mux {
 	return r
 }
 
-func validateSiteID(next http.Handler) http.Handler {
+func (s *Server) validateSiteID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		//userID := chi.URLParam(r, "siteID")
+		siteID, err := strconv.Atoi(chi.URLParam(r, "siteID"))
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, MessageResponse{Error: "siteID must be numeric"})
+			return
+		}
+		if s.Sites.GetSite(siteID) == nil {
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, MessageResponse{Error: "siteID not found"})
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-func validateDoorID(next http.Handler) http.Handler {
+func (s *Server) validateDoorID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		//userID := chi.URLParam(r, "doorID")
+		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+		doorID, err := strconv.ParseUint(chi.URLParam(r, "doorID"), 0, 64)
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, MessageResponse{Error: "doorID must be numeric"})
+			return
+		}
+		if s.Sites.GetSite(siteID).GetDoor(doorID) == nil {
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, MessageResponse{Error: "doorID not found"})
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-func validateUserID(next http.Handler) http.Handler {
+func (s *Server) validateUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		//userID := chi.URLParam(r, "userID")
+		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+		userID, err := strconv.Atoi(chi.URLParam(r, "userID"))
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, MessageResponse{Error: "userID must be numeric"})
+			return
+		}
+		if s.Sites.GetSite(siteID).GetUser(userID) == nil {
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, MessageResponse{Error: "userID not found"})
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
