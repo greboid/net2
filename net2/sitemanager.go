@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/greboid/net2/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
@@ -11,7 +12,6 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 	"net/http"
 	"net/url"
-	"net2/config"
 	"time"
 )
 

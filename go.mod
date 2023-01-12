@@ -1,13 +1,15 @@
-module net2
+module github.com/greboid/net2
 
 go 1.19
 
 require (
 	github.com/csmith/envflag v1.0.0
 	github.com/go-chi/chi/v5 v5.0.8
+	github.com/go-chi/docgen v1.2.0
 	github.com/go-chi/render v1.0.2
 	github.com/go-co-op/gocron v1.18.0
 	github.com/rs/zerolog v1.28.0
+	github.com/russross/blackfriday/v2 v2.1.0
 	github.com/samber/lo v1.37.0
 	golang.org/x/oauth2 v0.4.0
 	golang.org/x/sync v0.1.0

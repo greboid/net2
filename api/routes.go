@@ -3,9 +3,13 @@ package api
 import (
 	"errors"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/docgen"
 	"github.com/go-chi/render"
+	"github.com/greboid/net2/net2"
+	"github.com/rs/zerolog/log"
+	"github.com/russross/blackfriday/v2"
 	"net/http"
-	"net2/net2"
 	"strconv"
 	"time"
 )
@@ -44,8 +48,20 @@ func (d *SequenceDoorData) Bind(_ *http.Request) error {
 
 func (s *Server) GetRoutes() *chi.Mux {
 	r := chi.NewRouter()
+	r.Use(middleware.RealIP)
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(10 * time.Second))
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, MessageResponse{Error: "Resource not found"})
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		render.Status(r, http.StatusMethodNotAllowed)
+		render.JSON(w, r, MessageResponse{Error: "Method not allowed"})
+	})
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/", placeholder)
+		r.Get("/", placeholder(r))
 		r.Route("/update", func(r chi.Router) {
 			r.Get("/now", s.updateNow)
 			r.Get("/trigger", s.update)
@@ -153,8 +169,19 @@ func (s *Server) validateUserID(next http.Handler) http.Handler {
 	})
 }
 
-func placeholder(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, nil)
+func placeholder(router chi.Router) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		md := []byte(docgen.MarkdownRoutesDoc(router, docgen.MarkdownOpts{
+			ProjectPath:        "github.com/greboid/net2",
+			Intro:              "Net2 API Proxy",
+			ForceRelativeLinks: false,
+			URLMap:             nil,
+		}))
+		output := blackfriday.Run(md)
+		log.Info().Str("Markdown", string(md)).Msg("Markdown")
+		render.Status(r, http.StatusOK)
+		render.HTML(w, r, string(output))
+	}
 }
 
 func (s *Server) getUsers(w http.ResponseWriter, r *http.Request) {

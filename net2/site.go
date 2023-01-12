@@ -205,7 +205,12 @@ func (s *Site) UpdateUserInfo(userID int, info map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
-	resp, err := s.httpClient.Post(fmt.Sprintf("%s/api/v1/users/%d", s.BaseURL, userID), JsonContentType, bytes.NewReader(jsonBytes))
+	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/api/v1/users/%d", s.BaseURL, userID), bytes.NewReader(jsonBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", JsonContentType)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -229,7 +234,12 @@ func (s *Site) ChangeUserDepartment(userID, departmentID int) error {
 	if err != nil {
 		return err
 	}
-	resp, err := s.httpClient.Post(fmt.Sprintf("%s/api/v1/users/%d/departments", s.BaseURL, userID), JsonContentType, bytes.NewReader(jsonBytes))
+	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/api/v1/users/%d/departments", s.BaseURL, userID), bytes.NewReader(jsonBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", JsonContentType)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -249,7 +259,12 @@ func (s *Site) UpdateUserAccessLevels(userID int, accesslevels []int) error {
 	if err != nil {
 		return err
 	}
-	resp, err := s.httpClient.Post(fmt.Sprintf("%s/api/v1/users/%d/doorpermissionset", s.BaseURL, userID), JsonContentType, bytes.NewReader(jsonBytes))
+	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/api/v1/users/%d/doorpermissionset", s.BaseURL, userID), bytes.NewReader(jsonBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", JsonContentType)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
