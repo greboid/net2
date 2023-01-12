@@ -66,9 +66,10 @@ func (m *SiteManager) Start(sites []*Site) error {
 	m.sites = lo.SliceToMap(sites, func(item *Site) (int, *Site) {
 		return item.SiteID, item
 	})
+	log.Info().Msg("Starting sites")
 	started := 0
 	lo.ForEach(lo.Values(m.sites), func(item *Site, index int) {
-		log.Debug().Int("Site", index).Msg("Starting site")
+		log.Debug().Str("Site", item.Name).Msg("Starting site")
 		err := item.Start()
 		if err == nil {
 			started++
