@@ -32,17 +32,8 @@ func (s *Site) Start() error {
 	if s.cron == nil {
 		s.cron = gocron.NewScheduler(time.Now().Location())
 	}
-	_, err := s.cron.Every("1m").Tag("users").Do(func() {
-		s.UpdateThing("users", s.UpdateUsers)
-	})
-	_, err = s.cron.Every("1m").Tag("accesslevels").Do(func() {
-		s.UpdateThing("accesslevels", s.UpdateAccessLevels)
-	})
-	_, err = s.cron.Every("1m").Tag("doors").Do(func() {
-		s.UpdateThing("doors", s.UpdateDoors)
-	})
-	_, err = s.cron.Every("1m").Tag("departments").Do(func() {
-		s.UpdateThing("departments", s.UpdateDepartments)
+	_, err := s.cron.Every("1m").Tag("siteupdate").Do(func() {
+		s.UpdateAll()
 	})
 	s.cron.StartAsync()
 	return err
@@ -349,20 +340,33 @@ func (s *Site) UpdateUserNameAndExpiryAndAccessLevel(userid int, firstname strin
 }
 
 func (s *Site) UpdateAll() {
-	s.UpdateThing("users", s.UpdateUsers)
-	s.UpdateThing("accesslevels", s.UpdateAccessLevels)
-	s.UpdateThing("doors", s.UpdateDoors)
-	s.UpdateThing("departments", s.UpdateDepartments)
-}
-
-func (s *Site) UpdateThing(description string, fn func() error) {
-	log.Debug().Str("Site", s.Name).Msg("Updating " + description)
-	err := fn()
+	log.Debug().Str("Site", s.Name).Msg("Starting full update")
+	var err error
+	err = s.UpdateAccessLevels()
 	if err != nil {
-		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating " + description)
+		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating access levels")
 	} else {
-		log.Debug().Str("Site", s.Name).Msg("Updated " + description)
+		log.Debug().Str("Site", s.Name).Msg("Updated access levels")
 	}
+	err = s.UpdateDoors()
+	if err != nil {
+		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating doors")
+	} else {
+		log.Debug().Str("Site", s.Name).Msg("Updated doors")
+	}
+	err = s.UpdateDepartments()
+	if err != nil {
+		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating departments")
+	} else {
+		log.Debug().Str("Site", s.Name).Msg("Updated departments")
+	}
+	err = s.UpdateUsers()
+	if err != nil {
+		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating users")
+	} else {
+		log.Debug().Str("Site", s.Name).Msg("Updated users")
+	}
+	s.LastPolled = time.Now()
 }
 
 func (s *Site) getLocalFieldName() string {
