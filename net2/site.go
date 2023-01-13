@@ -377,9 +377,9 @@ func (s *Site) UpdateAll() {
 	total := time.Now().Sub(start).Milliseconds()
 	if !complete {
 		log.Info().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update Failed")
-		s.LastPolled = time.Now()
 	} else {
 		log.Debug().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update completed")
+		s.LastPolled = time.Now()
 	}
 }
 
