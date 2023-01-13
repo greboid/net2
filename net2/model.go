@@ -62,8 +62,8 @@ type Department struct {
 type User struct {
 	GUID              string            `json:"UserGUID"`
 	ID                int               `json:"id"`
-	Activated         string            `json:"activateDate"`
-	Expiry            string            `json:"expiryDate"`
+	Activated         time.Time         `json:"activateDate"`
+	Expiry            time.Time         `json:"expiryDate"`
 	FirstName         string            `json:"firstName"`
 	Surname           string            `json:"lastName"`
 	Custom            []UserCustomField `json:"customFields,omitempty"`

@@ -70,10 +70,12 @@ func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 }
 
 func (s *Site) GetActiveUsersInDepartment(prefix string) map[int]*User {
+	today := time.Now()
+	midnight := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
 	return lo.PickBy(s.Users, func(_ int, user *User) bool {
 		return lo.CountBy(user.Departments, func(department Department) bool {
 			return strings.HasPrefix(department.Name, prefix)
-		}) > 0
+		}) > 0 && (user.Expiry.After(midnight) || user.Expiry == time.Time{})
 	})
 }
 
@@ -450,8 +452,16 @@ func (s *Site) updateUsersWithData(query string) error {
 			s.Users[userID] = &User{}
 		}
 		s.Users[userID].ID = data[id].ID
-		s.Users[userID].Activated = data[id].ActivateDate
-		s.Users[userID].Expiry = data[id].ExpiryDate
+		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ActivateDate, time.Local); err == nil {
+			s.Users[userID].Activated = updatedTime
+		} else {
+			s.Users[userID].Activated, _ = time.Parse("2006-02-01", "0001-01-01")
+		}
+		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ExpiryDate, time.Local); err == nil {
+			s.Users[userID].Expiry = updatedTime
+		} else {
+			s.Users[userID].Expiry, _ = time.Parse("2006-02-01", "0001-01-01")
+		}
 		s.Users[userID].FirstName = data[id].Firstname
 		s.Users[userID].Surname = data[id].Surname
 		s.Users[userID].PIN = data[id].PIN
