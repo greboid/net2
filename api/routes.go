@@ -12,8 +12,8 @@ import (
 )
 
 type MessageResponse struct {
-	Error   string `json:"message,omitempty"`
-	Message string `json:"error,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 type UpdateUserData struct {
