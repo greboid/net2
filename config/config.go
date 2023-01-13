@@ -32,6 +32,18 @@ func LoadConfig(file string) (*Config, error) {
 		if config.Sites[index].Port == 0 {
 			config.Sites[index].Port = 8080
 		}
+		if config.Sites[index].ID == -1 {
+			return nil, errors.New("id is required for site: " + config.Sites[index].Name)
+		}
+		if config.Sites[index].Username == "" {
+			return nil, errors.New("username is required for site: " + config.Sites[index].Name)
+		}
+		if config.Sites[index].Password == "" {
+			return nil, errors.New("password is required for site: " + config.Sites[index].Name)
+		}
+		if config.Sites[index].IP == "" {
+			return nil, errors.New("ip is required for site: " + config.Sites[index].Name)
+		}
 		if config.Sites[index].LocalIDField == "" {
 			return nil, errors.New("localIDField is required for site: " + config.Sites[index].Name)
 		}
