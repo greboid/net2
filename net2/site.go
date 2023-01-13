@@ -343,33 +343,41 @@ func (s *Site) UpdateAll() {
 	log.Debug().Str("Site", s.Name).Msg("Starting full update")
 	var err error
 	start := time.Now()
+	complete := true
 	err = s.UpdateAccessLevels()
 	if err != nil {
+		complete = false
 		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating access levels")
 	} else {
 		log.Debug().Str("Site", s.Name).Msg("Updated access levels")
 	}
 	err = s.UpdateDoors()
 	if err != nil {
+		complete = false
 		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating doors")
 	} else {
 		log.Debug().Str("Site", s.Name).Msg("Updated doors")
 	}
 	err = s.UpdateDepartments()
 	if err != nil {
+		complete = false
 		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating departments")
 	} else {
 		log.Debug().Str("Site", s.Name).Msg("Updated departments")
 	}
 	err = s.UpdateUsers()
 	if err != nil {
+		complete = false
 		log.Error().Err(err).Str("Site", s.Name).Msg("Error updating users")
 	} else {
 		log.Debug().Str("Site", s.Name).Msg("Updated users")
 	}
 	total := time.Now().Sub(start).Milliseconds()
+	if complete {
+		log.Info().Str("Site", s.Name).Msg("Unable to fully sync")
+		s.LastPolled = time.Now()
+	}
 	log.Debug().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update completed")
-	s.LastPolled = time.Now()
 }
 
 func (s *Site) getLocalFieldName() string {
@@ -437,29 +445,30 @@ func (s *Site) updateUsersWithData(query string) error {
 		return err
 	}
 	for id := range data {
+		userID := data[id].ID
 		if _, ok := s.Users[id]; !ok {
-			s.Users[id] = &User{}
+			s.Users[userID] = &User{}
 		}
-		s.Users[id].ID = data[id].ID
-		s.Users[id].Activated = data[id].ActivateDate
-		s.Users[id].Expiry = data[id].ExpiryDate
-		s.Users[id].FirstName = data[id].Firstname
-		s.Users[id].Surname = data[id].Surname
-		s.Users[id].PIN = data[id].PIN
-		s.Users[id].GUID = data[id].UserGUID
+		s.Users[userID].ID = data[id].ID
+		s.Users[userID].Activated = data[id].ActivateDate
+		s.Users[userID].Expiry = data[id].ExpiryDate
+		s.Users[userID].FirstName = data[id].Firstname
+		s.Users[userID].Surname = data[id].Surname
+		s.Users[userID].PIN = data[id].PIN
+		s.Users[userID].GUID = data[id].UserGUID
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].LastAccessTime, time.Local); err == nil {
-			s.Users[id].LastUpdated = updatedTime
+			s.Users[userID].LastUpdated = updatedTime
 		} else {
-			s.Users[id].LastUpdated, _ = time.Parse("2006-02-01", "0001-01-01")
+			s.Users[userID].LastUpdated, _ = time.Parse("2006-02-01", "0001-01-01")
 		}
-		s.Users[id].LastKnownLocation = data[id].LastLocation
-		s.Users[id].Departments = []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}}
+		s.Users[userID].LastKnownLocation = data[id].LastLocation
+		s.Users[userID].Departments = []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}}
 		if strings.HasPrefix(data[id].AccessLevelName, "Individual: ") {
-			s.Users[id].AccessLevels = s.getExactAccessLevel(data[id])
+			s.Users[userID].AccessLevels = s.getExactAccessLevel(data[id])
 		} else {
-			s.Users[id].AccessLevels = []string{data[id].AccessLevelName}
+			s.Users[userID].AccessLevels = []string{data[id].AccessLevelName}
 		}
-		s.Users[id].LocalID = data[id].LocalID
+		s.Users[userID].LocalID = data[id].LocalID
 	}
 	return nil
 }
@@ -488,7 +497,11 @@ func (s *Site) getExactAccessLevel(data *userSQLQuery) []string {
 		accessLevels = append(accessLevels, s.AccessLevels[permissions.AccessLevels[index]].Name)
 	}
 	for index := range permissions.IndividualPermissions {
-		accessLevels = append(accessLevels, s.AccessLevels[permissions.IndividualPermissions[index].ID].Name)
+		if s.AccessLevels[permissions.IndividualPermissions[index].ID] != nil {
+			accessLevels = append(accessLevels, s.AccessLevels[permissions.IndividualPermissions[index].ID].Name)
+		} else {
+			log.Debug().Str("Site", s.Name).Interface("Idv Perm ID", permissions.IndividualPermissions[index].ID).Interface("User", data.Firstname+" "+data.Surname).Msg("Discarding invalid access level")
+		}
 	}
 	return accessLevels
 }
