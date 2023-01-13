@@ -193,9 +193,10 @@ func (s *Server) getUserPicture(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, MessageResponse{Error: "Error getting picture"})
 		return
 	}
-	render.Status(r, http.StatusOK)
 	w.Header().Set("Content-Type", "image/jpeg")
-	render.Data(w, r, picture)
+	render.Status(r, http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(picture)
 }
 
 func (s *Server) getSites(w http.ResponseWriter, r *http.Request) {
