@@ -375,11 +375,12 @@ func (s *Site) UpdateAll() {
 		log.Debug().Str("Site", s.Name).Msg("Updated users")
 	}
 	total := time.Now().Sub(start).Milliseconds()
-	if complete {
-		log.Info().Str("Site", s.Name).Msg("Unable to fully sync")
+	if !complete {
+		log.Info().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update Failed")
 		s.LastPolled = time.Now()
+	} else {
+		log.Debug().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update completed")
 	}
-	log.Debug().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update completed")
 }
 
 func (s *Site) getLocalFieldName() string {
