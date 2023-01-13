@@ -25,6 +25,7 @@ func GetSites(conf *config.Config, logger *zerolog.Logger) []*Site {
 			baseURL = fmt.Sprintf("http://%s:%d", site.IP, site.Port)
 		}
 		sites = append(sites, &Site{
+			config:           &site,
 			httpClient:       getHttpClient(conf, site, baseURL),
 			QuitChan:         make(chan bool),
 			BaseURL:          baseURL,
