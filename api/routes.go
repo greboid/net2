@@ -4,11 +4,8 @@ import (
 	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/docgen"
 	"github.com/go-chi/render"
 	"github.com/greboid/net2/net2"
-	"github.com/rs/zerolog/log"
-	"github.com/russross/blackfriday/v2"
 	"net/http"
 	"strconv"
 	"time"
@@ -61,7 +58,6 @@ func (s *Server) GetRoutes() *chi.Mux {
 		render.JSON(w, r, MessageResponse{Error: "Method not allowed"})
 	})
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/", placeholder(r))
 		r.Route("/update", func(r chi.Router) {
 			r.Get("/now", s.updateNow)
 			r.Get("/trigger", s.update)
@@ -169,18 +165,10 @@ func (s *Server) validateUserID(next http.Handler) http.Handler {
 	})
 }
 
-func placeholder(router chi.Router) func(http.ResponseWriter, *http.Request) {
+func Index(router chi.Router) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		md := []byte(docgen.MarkdownRoutesDoc(router, docgen.MarkdownOpts{
-			ProjectPath:        "github.com/greboid/net2",
-			Intro:              "Net2 API Proxy",
-			ForceRelativeLinks: false,
-			URLMap:             nil,
-		}))
-		output := blackfriday.Run(md)
-		log.Info().Str("Markdown", string(md)).Msg("Markdown")
 		render.Status(r, http.StatusOK)
-		render.HTML(w, r, string(output))
+		render.JSON(w, r, MessageResponse{Message: "Net2 Proxy API Index"})
 	}
 }
 
