@@ -58,6 +58,7 @@ func (s *Server) GetRoutes() *chi.Mux {
 		render.JSON(w, r, MessageResponse{Error: "Method not allowed"})
 	})
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/", s.Index)
 		r.Route("/update", func(r chi.Router) {
 			r.Get("/now", s.updateNow)
 			r.Get("/trigger", s.update)
@@ -165,11 +166,9 @@ func (s *Server) validateUserID(next http.Handler) http.Handler {
 	})
 }
 
-func Index(router chi.Router) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		render.Status(r, http.StatusOK)
-		render.JSON(w, r, MessageResponse{Message: "Net2 Proxy API Index"})
-	}
+func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, MessageResponse{Message: "Net2 Proxy API Index"})
 }
 
 func (s *Server) getUsers(w http.ResponseWriter, r *http.Request) {
