@@ -446,7 +446,7 @@ func (s *Site) updateUsersWithData(query string) error {
 	}
 	for id := range data {
 		userID := data[id].ID
-		if _, ok := s.Users[id]; !ok {
+		if _, ok := s.Users[userID]; !ok {
 			s.Users[userID] = &User{}
 		}
 		s.Users[userID].ID = data[id].ID
