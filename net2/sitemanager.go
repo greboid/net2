@@ -12,6 +12,7 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
 
@@ -115,7 +116,17 @@ func (m *SiteManager) Count() int {
 }
 
 func (m *SiteManager) UpdateAll() {
+	start := time.Now()
+	log.Debug().Msg("Update all sites started")
+	wg := new(sync.WaitGroup)
 	for _, site := range m.sites {
-		site.UpdateAll()
+		wg.Add(1)
+		go func(s *Site, wg *sync.WaitGroup) {
+			s.UpdateAll()
+			wg.Done()
+		}(site, wg)
 	}
+	wg.Wait()
+	total := time.Now().Sub(start).Milliseconds()
+	log.Debug().Int64("Total (ms)", total).Msg("Update all sites finished")
 }
