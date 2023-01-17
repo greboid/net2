@@ -343,6 +343,8 @@ func (s *Site) UpdateUserNameAndExpiryAndAccessLevel(userid int, firstname strin
 
 func (s *Site) UpdateAll() {
 	log.Debug().Str("Site", s.Name).Msg("Starting full update")
+	s.updateLock.Lock()
+	defer s.updateLock.Unlock()
 	var err error
 	start := time.Now()
 	complete := true

@@ -5,6 +5,7 @@ import (
 	"github.com/greboid/net2/config"
 	"github.com/rs/zerolog"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -25,6 +26,7 @@ type Site struct {
 	cron             *gocron.Scheduler
 	config           *config.SiteConfig
 	localIDFieldName string
+	updateLock       sync.Mutex
 	LocalIDField     string                         `json:"-"`
 	AccessLevels     map[int]*AccessLevel           `json:"-"`
 	Departments      map[int]*Department            `json:"-"`
