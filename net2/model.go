@@ -98,8 +98,8 @@ type Door struct {
 }
 
 type DoorSequenceItem struct {
-	Door uint64
-	Time time.Duration
+	Door uint64        `json:"door"`
+	Time time.Duration `json:"time"`
 }
 
 type Event struct {

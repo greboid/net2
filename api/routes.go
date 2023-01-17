@@ -33,10 +33,7 @@ func (d *UpdateUserData) Bind(_ *http.Request) error {
 }
 
 type SequenceDoorData struct {
-	Door1 uint64        `json:"d1"`
-	Time1 time.Duration `json:"t1"`
-	Door2 uint64        `json:"d2"`
-	Time2 time.Duration `json:"t2"`
+	doors []net2.DoorSequenceItem
 }
 
 func (d *SequenceDoorData) Bind(_ *http.Request) error {
@@ -424,8 +421,9 @@ func (s *Server) sequenceDoors(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, MessageResponse{Error: "Error sequencing doors"})
 		return
 	}
+
 	go func() {
-		s.Sites.GetSite(siteID).SequenceDoor(net2.DoorSequenceItem{Door: data.Door1, Time: data.Time1}, net2.DoorSequenceItem{Door: data.Door2, Time: data.Time2})
+		s.Sites.GetSite(siteID).SequenceDoor(data.doors...)
 	}()
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, MessageResponse{Message: "Sequence triggered"})

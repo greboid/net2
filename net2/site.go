@@ -131,7 +131,12 @@ func (s *Site) OpenDoor(doorID uint64) error {
 	if err != nil {
 		return err
 	}
+	bodyData, _ := io.ReadAll(resp.Body)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != 200 {
+		log.Error().Bytes("Response", bodyData).Msg("Unable to close door")
 		return errors.New("unable to open door")
 	}
 	return nil
@@ -147,7 +152,12 @@ func (s *Site) CloseDoor(doorID uint64) error {
 	if err != nil {
 		return err
 	}
+	bodyData, _ := io.ReadAll(resp.Body)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != 200 {
+		log.Error().Bytes("Response", bodyData).Msg("Unable to close door")
 		return errors.New("unable to close door")
 	}
 	return nil
