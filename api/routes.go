@@ -1,11 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/greboid/net2/net2"
+	"github.com/rs/zerolog/log"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -33,7 +36,8 @@ func (d *UpdateUserData) Bind(_ *http.Request) error {
 }
 
 type SequenceDoorData struct {
-	doors []net2.DoorSequenceItem
+	Door string `json:"door"`
+	Time string `json:"time"`
 }
 
 func (d *SequenceDoorData) Bind(_ *http.Request) error {
@@ -414,16 +418,52 @@ func (s *Server) updateNow(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) sequenceDoors(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	data := &SequenceDoorData{}
-	err := render.Bind(r, data)
+	bytes, err := io.ReadAll(r.Body)
+	defer func() {
+		_ = r.Body.Close()
+	}()
 	if err != nil {
+		log.Error().Err(err).Msg("Unable to read body for door sequence")
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error sequencing doors"})
 		return
 	}
-
+	log.Debug().Str("Web Door Sequence", string(bytes)).Msg("Raw door data")
+	var data []SequenceDoorData
+	err = json.Unmarshal(bytes, &data)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to decode data for door sequence")
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, MessageResponse{Error: "Error sequencing doors"})
+		return
+	}
+	log.Debug().Interface("Web Door Sequence", data).Msg("Door data")
+	var doors []net2.DoorSequenceItem
+	for index := range data {
+		if data[index].Time == "" {
+			data[index].Time = "0s"
+		}
+		duration, err := time.ParseDuration(data[index].Time)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to decode data duration for door sequence")
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, MessageResponse{Error: "Error sequencing doors"})
+			return
+		}
+		door, err := strconv.ParseUint(data[index].Door, 0, 64)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to decode data door for door sequence")
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, MessageResponse{Error: "Error sequencing doors"})
+			return
+		}
+		doors = append(doors, net2.DoorSequenceItem{
+			Door: door,
+			Time: duration,
+		})
+	}
 	go func() {
-		s.Sites.GetSite(siteID).SequenceDoor(data.doors...)
+		s.Sites.GetSite(siteID).SequenceDoor(doors...)
 	}()
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, MessageResponse{Message: "Sequence triggered"})

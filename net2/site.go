@@ -330,7 +330,10 @@ func (s *Site) AddUserAccessLevel(userID int, accesslevel int) error {
 
 func (s *Site) SequenceDoor(items ...DoorSequenceItem) {
 	for _, value := range items {
-		_ = s.OpenDoor(value.Door)
+		err := s.OpenDoor(value.Door)
+		if err != nil {
+			log.Error().Err(err).Interface("Doors", items).Msg("Unable to open door in sequence")
+		}
 		time.Sleep(value.Time)
 	}
 }
