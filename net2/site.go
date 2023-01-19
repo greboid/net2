@@ -408,7 +408,7 @@ func (s *Site) getLocalFieldName() string {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		log.Error().Bytes("Response", bodyData).Msg("Unable to get custom fields")
+		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to get custom fields")
 		return ""
 	}
 	fields := make([]*CustomFieldDefinition, 20)
@@ -454,7 +454,7 @@ func (s *Site) updateUsersWithData(query string) error {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Msg("Unable to pull users")
+		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull users")
 		return errors.New("unable to update user info")
 	}
 	data := make([]*userSQLQuery, 0)
@@ -510,7 +510,7 @@ func (s *Site) getExactAccessLevel(data *userSQLQuery) []string {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Msg("Unable to get permissions")
+		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to get permissions")
 		return []string{data.AccessLevelName}
 	}
 	permissions := Permission{}
@@ -555,7 +555,7 @@ func (s *Site) updateLevels() (map[int]*AccessLevel, error) {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Msg("Unable to pull access levels")
+		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull access levels")
 		return nil, errors.New("unable to pull access levels")
 	}
 	accesslevels := make([]*AccessLevel, 50)
@@ -578,7 +578,7 @@ func (s *Site) updateAreas() (map[int]*AccessLevel, error) {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Msg("Unable to pull access levels")
+		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull access levels")
 		return nil, errors.New("unable to pull access levels")
 	}
 	accesslevels := make([]*Area, 50)
@@ -619,7 +619,7 @@ func (s *Site) getDoors() ([]*Door, error) {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Msg("Unable to pull doors")
+		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull doors")
 		return nil, errors.New("unable to pull doors")
 	}
 	doorSlice := make([]*Door, 50)
@@ -663,7 +663,7 @@ func (s *Site) UpdateDepartments() error {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		log.Error().Bytes("Response", bodyData).Msg("Unable to update doors")
+		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to update doors")
 		return errors.New("unable to update doors")
 	}
 	departments := make([]*Department, 50)
