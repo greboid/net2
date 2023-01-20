@@ -52,7 +52,7 @@ func (s *Site) GetUsers() map[int]*User {
 }
 
 func (s *Site) GetUserPicture(userID int) ([]byte, error) {
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s/api/v1/users/%d/image", s.BaseURL, userID))
+	resp, err := s.doGet(fmt.Sprintf("%s/api/v1/users/%d/image", s.BaseURL, userID))
 	if err != nil {
 		return nil, err
 	}
@@ -127,16 +127,12 @@ func (s *Site) OpenDoor(doorID uint64) error {
 	if !ok {
 		return errors.New("invalid door")
 	}
-	resp, err := s.httpClient.Post(fmt.Sprintf("%s/api/v1/commands/door/open", s.BaseURL), JsonContentType, bytes.NewReader(jsonBytes))
+	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/door/open", s.BaseURL), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
-	bodyData, _ := io.ReadAll(resp.Body)
-	defer func() {
-		_ = resp.Body.Close()
-	}()
 	if resp.StatusCode != 200 {
-		log.Error().Bytes("Response", bodyData).Msg("Unable to close door")
+		log.Error().Int("Status", resp.StatusCode).Msg("Unable to close door")
 		return errors.New("unable to open door")
 	}
 	return nil
@@ -148,16 +144,12 @@ func (s *Site) CloseDoor(doorID uint64) error {
 	if !ok {
 		return errors.New("invalid door")
 	}
-	resp, err := s.httpClient.Post(fmt.Sprintf("%s/api/v1/commands/door/close", s.BaseURL), JsonContentType, bytes.NewReader(jsonBytes))
+	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/door/close", s.BaseURL), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
-	bodyData, _ := io.ReadAll(resp.Body)
-	defer func() {
-		_ = resp.Body.Close()
-	}()
 	if resp.StatusCode != 200 {
-		log.Error().Bytes("Response", bodyData).Msg("Unable to close door")
+		log.Error().Int("Status", resp.StatusCode).Msg("Unable to close door")
 		return errors.New("unable to close door")
 	}
 	return nil
@@ -171,9 +163,43 @@ func (s *Site) GetDepartments() map[int]*Department {
 	return s.Departments
 }
 
+func (s *Site) doRequest(method string, url string, body io.Reader) (*http.Response, error) {
+	var req *http.Request
+	var resp *http.Response
+	var err error
+	for tryReauth := 2; tryReauth > 0; tryReauth-- {
+		req, err = http.NewRequest(method, url, body)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", JsonContentType)
+		resp, err = s.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusUnauthorized {
+			break
+		}
+		s.httpClient = getHttpClient(s.clientID, s.config.Username, s.config.Password, s.BaseURL)
+	}
+	return resp, err
+}
+
+func (s *Site) doPost(url string, body io.Reader) (*http.Response, error) {
+	return s.doRequest(http.MethodPost, url, body)
+}
+
+func (s *Site) doPut(url string, body io.Reader) (*http.Response, error) {
+	return s.doRequest(http.MethodPut, url, body)
+}
+
+func (s *Site) doGet(url string) (*http.Response, error) {
+	return s.doRequest(http.MethodGet, url, nil)
+}
+
 func (s *Site) ResetAntiPassback(userID int) error {
 	jsonBytes, _ := json.Marshal(map[string]int{"userId": userID})
-	resp, err := s.httpClient.Post(fmt.Sprintf("%s/api/v1/commands/antipassback/reset", s.BaseURL), JsonContentType, bytes.NewReader(jsonBytes))
+	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/antipassback/reset", s.BaseURL), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
@@ -208,21 +234,12 @@ func (s *Site) UpdateUserInfo(userID int, info map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/api/v1/users/%d", s.BaseURL, userID), bytes.NewReader(jsonBytes))
+	resp, err := s.doPut(fmt.Sprintf("%s/api/v1/users/%d", s.BaseURL, userID), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", JsonContentType)
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	bodyData, _ := io.ReadAll(resp.Body)
-	defer func() {
-		_ = resp.Body.Close()
-	}()
 	if resp.StatusCode != 200 {
-		s.logger.Error().Bytes("Response", bodyData).Msg("Unable to update user")
+		s.logger.Error().Int("Status", resp.StatusCode).Msg("Unable to update user")
 		return errors.New("unable to update user info")
 	}
 	return s.UpdateUser(userID)
@@ -237,12 +254,7 @@ func (s *Site) ChangeUserDepartment(userID, departmentID int) error {
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/api/v1/users/%d/departments", s.BaseURL, userID), bytes.NewReader(jsonBytes))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", JsonContentType)
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.doPut(fmt.Sprintf("%s/api/v1/users/%d/departments", s.BaseURL, userID), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
@@ -262,21 +274,12 @@ func (s *Site) UpdateUserAccessLevels(userID int, accesslevels []int) error {
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/api/v1/users/%d/doorpermissionset", s.BaseURL, userID), bytes.NewReader(jsonBytes))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", JsonContentType)
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.doPut(fmt.Sprintf("%s/api/v1/users/%d/doorpermissionset", s.BaseURL, userID), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		bodyData, _ := io.ReadAll(resp.Body)
-		defer func() {
-			_ = resp.Body.Close()
-		}()
-		s.logger.Error().Bytes("Response", bodyData).Msg("Unable to update user access level")
+		s.logger.Error().Int("Status", resp.StatusCode).Msg("Unable to update user access level")
 		return errors.New("unable to update user info")
 	}
 	return s.UpdateUser(userID)
@@ -399,7 +402,7 @@ func (s *Site) UpdateAll() {
 }
 
 func (s *Site) getLocalFieldName() string {
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/users/customfieldnames"))
+	resp, err := s.doGet(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/users/customfieldnames"))
 	if err != nil {
 		return ""
 	}
@@ -408,7 +411,7 @@ func (s *Site) getLocalFieldName() string {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to get custom fields")
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to get custom fields")
 		return ""
 	}
 	fields := make([]*CustomFieldDefinition, 20)
@@ -445,7 +448,7 @@ func (s *Site) UpdateUsers() error {
 }
 
 func (s *Site) updateUsersWithData(query string) error {
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s/api/v1/customquery/querydb?query=%s", s.BaseURL, url.QueryEscape(query)))
+	resp, err := s.doGet(fmt.Sprintf("%s/api/v1/customquery/querydb?query=%s", s.BaseURL, url.QueryEscape(query)))
 	if err != nil {
 		return err
 	}
@@ -454,7 +457,7 @@ func (s *Site) updateUsersWithData(query string) error {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull users")
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull users")
 		return errors.New("unable to update user info")
 	}
 	data := make([]*userSQLQuery, 0)
@@ -500,7 +503,7 @@ func (s *Site) updateUsersWithData(query string) error {
 }
 
 func (s *Site) getExactAccessLevel(data *userSQLQuery) []string {
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s%s%d%s", s.BaseURL, "/api/v1/users/", data.ID, "/doorpermissionset"))
+	resp, err := s.doGet(fmt.Sprintf("%s%s%d%s", s.BaseURL, "/api/v1/users/", data.ID, "/doorpermissionset"))
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get exact permissions")
 		return []string{data.AccessLevelName}
@@ -510,7 +513,7 @@ func (s *Site) getExactAccessLevel(data *userSQLQuery) []string {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to get permissions")
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to get permissions")
 		return []string{data.AccessLevelName}
 	}
 	permissions := Permission{}
@@ -546,7 +549,7 @@ func (s *Site) UpdateAccessLevels() error {
 }
 
 func (s *Site) updateLevels() (map[int]*AccessLevel, error) {
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/accesslevels"))
+	resp, err := s.doGet(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/accesslevels"))
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +558,7 @@ func (s *Site) updateLevels() (map[int]*AccessLevel, error) {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull access levels")
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull access levels")
 		return nil, errors.New("unable to pull access levels")
 	}
 	accesslevels := make([]*AccessLevel, 50)
@@ -569,7 +572,7 @@ func (s *Site) updateLevels() (map[int]*AccessLevel, error) {
 }
 
 func (s *Site) updateAreas() (map[int]*AccessLevel, error) {
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/accesslevels/areas"))
+	resp, err := s.doGet(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/accesslevels/areas"))
 	if err != nil {
 		return nil, err
 	}
@@ -578,7 +581,7 @@ func (s *Site) updateAreas() (map[int]*AccessLevel, error) {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull access levels")
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull access levels")
 		return nil, errors.New("unable to pull access levels")
 	}
 	accesslevels := make([]*Area, 50)
@@ -610,7 +613,7 @@ func (s *Site) UpdateDoors() error {
 }
 
 func (s *Site) getDoors() ([]*Door, error) {
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s/api/v1/doors", s.BaseURL))
+	resp, err := s.doGet(fmt.Sprintf("%s/api/v1/doors", s.BaseURL))
 	if err != nil {
 		return nil, err
 	}
@@ -619,7 +622,7 @@ func (s *Site) getDoors() ([]*Door, error) {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull doors")
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull doors")
 		return nil, errors.New("unable to pull doors")
 	}
 	doorSlice := make([]*Door, 50)
@@ -632,7 +635,7 @@ func (s *Site) getDoors() ([]*Door, error) {
 
 func (s *Site) getDoorStatus() (map[int]int, error) {
 	query := "SELECT Address, statusFlag FROM devices"
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s/api/v1/customquery/querydb?query=%s", s.BaseURL, url.QueryEscape(query)))
+	resp, err := s.doGet(fmt.Sprintf("%s/api/v1/customquery/querydb?query=%s", s.BaseURL, url.QueryEscape(query)))
 	if err != nil {
 		return nil, err
 	}
@@ -654,7 +657,7 @@ func (s *Site) getDoorStatus() (map[int]int, error) {
 }
 
 func (s *Site) UpdateDepartments() error {
-	resp, err := s.httpClient.Get(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/departments"))
+	resp, err := s.doGet(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/departments"))
 	if err != nil {
 		return err
 	}
@@ -663,7 +666,7 @@ func (s *Site) UpdateDepartments() error {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Error().Bytes("Response", bodyData).Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to update doors")
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to update doors")
 		return errors.New("unable to update doors")
 	}
 	departments := make([]*Department, 50)

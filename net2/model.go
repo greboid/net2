@@ -27,6 +27,7 @@ type Site struct {
 	config           *config.SiteConfig
 	localIDFieldName string
 	updateLock       sync.Mutex
+	clientID         string
 	LocalIDField     string                         `json:"-"`
 	AccessLevels     map[int]*AccessLevel           `json:"-"`
 	Departments      map[int]*Department            `json:"-"`

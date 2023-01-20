@@ -27,7 +27,8 @@ func GetSites(conf *config.Config, logger *zerolog.Logger) []*Site {
 		}
 		sites = append(sites, &Site{
 			config:           &site,
-			httpClient:       getHttpClient(conf, site, baseURL),
+			httpClient:       getHttpClient(conf.ClientID, site.Username, site.Password, baseURL),
+			clientID:         conf.ClientID,
 			QuitChan:         make(chan bool),
 			BaseURL:          baseURL,
 			SiteID:           site.ID,
@@ -40,13 +41,13 @@ func GetSites(conf *config.Config, logger *zerolog.Logger) []*Site {
 	return sites
 }
 
-func getHttpClient(conf *config.Config, site config.SiteConfig, baseURL string) *http.Client {
+func getHttpClient(clientID string, username string, password string, baseURL string) *http.Client {
 	oauthConfig := clientcredentials.Config{
-		ClientID: conf.ClientID,
+		ClientID: clientID,
 		TokenURL: fmt.Sprintf("%s/api/v1/authorization/tokens", baseURL),
 		EndpointParams: url.Values{
-			"username":   {site.Username},
-			"password":   {site.Password},
+			"username":   {username},
+			"password":   {password},
 			"grant_type": {"password"},
 			"scope":      {"offline_access"},
 		},
