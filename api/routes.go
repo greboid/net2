@@ -93,6 +93,7 @@ func (s *Server) GetRoutes() *chi.Mux {
 					r.Get("/activestafftoday", s.getActiveStaffToday)
 					r.Get("/activevisitors", s.getActiveVisitors)
 					r.Get("/activevisitorstoday", s.getActiveVisitorsToday)
+					r.Get("/cancelled", s.getCancelledUsers)
 					r.With(s.validateUserID).Route("/{userID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getUser)
 						r.Get("/picture", s.getUserPicture)
@@ -245,6 +246,12 @@ func (s *Server) getActiveUsers(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, s.Sites.GetSite(siteID).GetActiveUsers())
+}
+
+func (s *Server) getCancelledUsers(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, s.Sites.GetSite(siteID).GetCancelledUsers())
 }
 
 func (s *Server) getDoors(w http.ResponseWriter, r *http.Request) {

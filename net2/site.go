@@ -89,6 +89,14 @@ func (s *Site) GetTodaysActiveUsersInDepartment(prefix string) map[int]*User {
 	})
 }
 
+func (s *Site) GetCancelledUsers() interface{} {
+	return lo.PickBy(s.Users, func(_ int, user *User) bool {
+		return lo.CountBy(user.Departments, func(department Department) bool {
+			return strings.HasPrefix(department.Name, s.config.CancelledDeptPrefix)
+		}) > 0
+	})
+}
+
 func (s *Site) GetActiveStaffToday() map[int]*User {
 	return s.GetTodaysActiveUsersInDepartment(s.config.StaffDeptPrefix)
 }
