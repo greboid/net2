@@ -18,23 +18,23 @@ import (
 
 func GetSites(conf *config.Config, logger *zerolog.Logger) []*Site {
 	sites := make([]*Site, 0, len(conf.Sites))
-	for _, site := range conf.Sites {
+	for index := range conf.Sites {
 		var baseURL string
-		if site.Https {
-			baseURL = fmt.Sprintf("https://%s:%d", site.IP, site.Port)
+		if conf.Sites[index].Https {
+			baseURL = fmt.Sprintf("https://%s:%d", conf.Sites[index].IP, conf.Sites[index].Port)
 		} else {
-			baseURL = fmt.Sprintf("http://%s:%d", site.IP, site.Port)
+			baseURL = fmt.Sprintf("http://%s:%d", conf.Sites[index].IP, conf.Sites[index].Port)
 		}
 		sites = append(sites, &Site{
-			config:           &site,
-			httpClient:       getHttpClient(conf.ClientID, site.Username, site.Password, baseURL),
+			config:           &conf.Sites[index],
+			httpClient:       getHttpClient(conf.ClientID, conf.Sites[index].Username, conf.Sites[index].Password, baseURL),
 			clientID:         conf.ClientID,
 			QuitChan:         make(chan bool),
 			BaseURL:          baseURL,
-			SiteID:           site.ID,
-			Name:             site.Name,
+			SiteID:           conf.Sites[index].ID,
+			Name:             conf.Sites[index].Name,
 			LastPolled:       time.Time{},
-			localIDFieldName: site.LocalIDField,
+			localIDFieldName: conf.Sites[index].LocalIDField,
 			logger:           logger,
 		})
 	}
