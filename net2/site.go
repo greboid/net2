@@ -134,8 +134,10 @@ func (s *Site) GetMonitoredDoors() map[uint64]*Door {
 	})
 }
 
-func (s *Site) GetOpenableDoors() []config.OpenableDoor {
-	return s.config.OpenableDoors
+func (s *Site) GetOpenableDoors() map[string][]config.DoorSequence {
+	return lo.SliceToMap(s.config.OpenableDoors, func(item config.OpenableDoor) (string, []config.DoorSequence) {
+		return item.Name, item.Sequence
+	})
 }
 
 func (s *Site) GetDoor(doorID uint64) *Door {
