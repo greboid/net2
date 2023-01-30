@@ -96,6 +96,7 @@ type Door struct {
 	Name        string `json:"name"`
 	StatusFlag  int
 	AlarmStatus int
+	AlarmZone   string
 }
 
 type DoorSequenceItem struct {

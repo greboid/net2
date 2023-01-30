@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-co-op/gocron"
+	"github.com/greboid/net2/config"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
 	"io"
@@ -123,6 +124,14 @@ func (s *Site) GetActiveUsers() map[int]*User {
 
 func (s *Site) GetDoors() map[uint64]*Door {
 	return s.Doors
+}
+
+func (s *Site) GetMonitoredDoors() map[uint64]*Door {
+	return lo.PickBy(s.Doors, func(_ uint64, door *Door) bool {
+		return lo.CountBy(s.config.MonitoredDoors, func(monitoredDoor config.MonitoredDoor) bool {
+			return uint64(monitoredDoor.ID) == door.ID
+		}) > 0
+	})
 }
 
 func (s *Site) GetDoor(doorID uint64) *Door {
@@ -616,6 +625,11 @@ func (s *Site) UpdateDoors() error {
 		item.StatusFlag = doorStatus[int(item.ID)]
 		item.AlarmStatus = item.StatusFlag & DoorStatus_IntruderAlarm
 		return item.ID, item
+	})
+	lo.ForEach(s.config.MonitoredDoors, func(item config.MonitoredDoor, index int) {
+		if val, ok := s.Doors[uint64(item.ID)]; ok {
+			val.AlarmZone = item.Zone
+		}
 	})
 	return nil
 }
