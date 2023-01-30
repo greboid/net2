@@ -134,6 +134,10 @@ func (s *Site) GetMonitoredDoors() map[uint64]*Door {
 	})
 }
 
+func (s *Site) GetOpenableDoors() []config.OpenableDoor {
+	return s.config.OpenableDoors
+}
+
 func (s *Site) GetDoor(doorID uint64) *Door {
 	return s.Doors[doorID]
 }

@@ -79,6 +79,7 @@ func (s *Server) GetRoutes() *chi.Mux {
 				r.Route("/doors", func(r chi.Router) {
 					r.Get("/", s.getDoors)
 					r.Get("/monitored", s.getMonitoredDoors)
+					r.Get("/openable", s.getOpenableDoors)
 					r.Post("/sequence", s.sequenceDoors)
 					r.With(s.validateDoorID).Route("/{doorID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getDoor)
@@ -265,6 +266,12 @@ func (s *Server) getMonitoredDoors(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, s.Sites.GetSite(siteID).GetMonitoredDoors())
+}
+
+func (s *Server) getOpenableDoors(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, s.Sites.GetSite(siteID).GetOpenableDoors())
 }
 
 func (s *Server) getDoor(w http.ResponseWriter, r *http.Request) {

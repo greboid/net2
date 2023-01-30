@@ -1,15 +1,28 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"gopkg.in/yaml.v3"
 	"os"
+	"time"
 )
 
-type Config struct {
-	APIPort  int          `yaml:"apiport"`
-	ClientID string       `yaml:"clientid"`
-	Sites    []SiteConfig `yaml:"sites"`
+func (d *Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(*d).String())
+}
+
+func (d *Duration) MarshalYAML() (interface{}, error) {
+	return time.Duration(*d).String(), nil
+}
+
+func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
+	out, err := time.ParseDuration(value.Value)
+	if err != nil {
+		return err
+	}
+	*d = Duration(out)
+	return nil
 }
 
 func LoadConfig(file string) (*Config, error) {

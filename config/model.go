@@ -1,6 +1,14 @@
 package config
 
-import "time"
+import (
+	"time"
+)
+
+type Config struct {
+	APIPort  int          `yaml:"apiport"`
+	ClientID string       `yaml:"clientid"`
+	Sites    []SiteConfig `yaml:"sites"`
+}
 
 type SiteConfig struct {
 	ID                   int             `yaml:"id"`
@@ -33,6 +41,8 @@ type OpenableDoor struct {
 }
 
 type DoorSequence struct {
-	ID       int           `yaml:"id"`
-	Duration time.Duration `yaml:"duration"`
+	ID       int      `yaml:"id"`
+	Duration Duration `yaml:"duration"`
 }
+
+type Duration time.Duration
