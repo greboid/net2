@@ -70,61 +70,101 @@ func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 	return body, nil
 }
 
-func (s *Site) GetActiveUsersInDepartment(match func(test string) bool) map[int]*User {
-	today := time.Now()
-	midnight := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
+func (s *Site) GetUsersInDepartment(departmentMatch func(test Department) bool, userMatch func(test *User) bool) map[int]*User {
 	return lo.PickBy(s.Users, func(_ int, user *User) bool {
 		return lo.CountBy(user.Departments, func(department Department) bool {
-			return match(department.Name)
-		}) > 0 && (user.Expiry.After(midnight) || user.Expiry == time.Time{})
+			return departmentMatch(department)
+		}) > 0 && userMatch(user)
 	})
 }
 
-func (s *Site) GetTodaysActiveUsersInDepartment(match func(test string) bool) map[int]*User {
+func (s *Site) GetActiveUsersInDepartment(match func(test Department) bool) map[int]*User {
 	today := time.Now()
 	midnight := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
-	return lo.PickBy(s.Users, func(_ int, user *User) bool {
-		return lo.CountBy(user.Departments, func(department Department) bool {
-			return match(department.Name)
-		}) > 0 && user.LastUpdated.After(midnight)
-	})
+	return s.GetUsersInDepartment(match, func(test *User) bool { return test.Expiry.After(midnight) || test.Expiry == time.Time{} })
+}
+
+func (s *Site) GetTodaysActiveUsersInDepartment(match func(test Department) bool) map[int]*User {
+	today := time.Now()
+	midnight := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
+	return s.GetUsersInDepartment(match, func(test *User) bool { return test.LastUpdated.After(midnight) })
 }
 
 func (s *Site) GetCancelledUsers() interface{} {
-	return lo.PickBy(s.Users, func(_ int, user *User) bool {
-		return lo.CountBy(user.Departments, func(department Department) bool {
-			return strings.HasPrefix(department.Name, s.config.CancelledDeptPrefix)
-		}) > 0
-	})
+	return s.GetUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.CancelledDeptPrefix) }, func(test *User) bool { return true })
 }
 
 func (s *Site) GetActiveStaffToday() map[int]*User {
-	return s.GetTodaysActiveUsersInDepartment(func(test string) bool { return strings.HasPrefix(test, s.config.StaffDeptPrefix) })
+	return s.GetTodaysActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.StaffDeptPrefix) })
 }
 
 func (s *Site) GetActiveStaff() map[int]*User {
-	return s.GetActiveUsersInDepartment(func(test string) bool { return strings.HasPrefix(test, s.config.StaffDeptPrefix) })
+	return s.GetActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.StaffDeptPrefix) })
+}
+
+func (s *Site) GetStaff() map[int]*User {
+	return s.GetUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.StaffDeptPrefix) }, func(test *User) bool { return true })
 }
 
 func (s *Site) GetActiveVisitorsToday() map[int]*User {
-	return s.GetTodaysActiveUsersInDepartment(func(test string) bool { return strings.HasPrefix(test, s.config.VisitorDeptPrefix) })
+	return s.GetTodaysActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.VisitorDeptPrefix) })
 }
 
 func (s *Site) GetActiveVisitors() map[int]*User {
-	return s.GetActiveUsersInDepartment(func(test string) bool { return strings.HasPrefix(test, s.config.VisitorDeptPrefix) })
+	return s.GetActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.VisitorDeptPrefix) })
+}
+
+func (s *Site) GetVisitors() map[int]*User {
+	return s.GetUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.VisitorDeptPrefix) }, func(test *User) bool { return true })
+}
+
+func (s *Site) GetActiveContractorsToday() map[int]*User {
+	return s.GetTodaysActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.ContractorDeptPrefix) })
+}
+
+func (s *Site) GetActiveContractors() map[int]*User {
+	return s.GetActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.ContractorDeptPrefix) })
+}
+
+func (s *Site) GetContractors() map[int]*User {
+	return s.GetUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.ContractorDeptPrefix) }, func(test *User) bool { return true })
+}
+
+func (s *Site) GetActiveCleanersToday() map[int]*User {
+	return s.GetTodaysActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.CleanerDeptPrefix) })
+}
+
+func (s *Site) GetActiveCleaners() map[int]*User {
+	return s.GetActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.CleanerDeptPrefix) })
+}
+
+func (s *Site) GetCleaners() map[int]*User {
+	return s.GetUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.CleanerDeptPrefix) }, func(test *User) bool { return true })
+}
+
+func (s *Site) GetActiveCustomersToday() map[int]*User {
+	return s.GetTodaysActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.CustomerDeptPrefix) })
+}
+
+func (s *Site) GetActiveCustomers() map[int]*User {
+	return s.GetActiveUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.CustomerDeptPrefix) })
+}
+
+func (s *Site) GetCustomers() map[int]*User {
+	return s.GetUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.CustomerDeptPrefix) }, func(test *User) bool { return true })
 }
 
 func (s *Site) GetActiveUsersToday() map[int]*User {
-	return s.GetTodaysActiveUsersInDepartment(func(test string) bool { return true })
+	return s.GetTodaysActiveUsersInDepartment(func(test Department) bool { return true })
 }
 
 func (s *Site) GetActiveUsers() map[int]*User {
-	return s.GetActiveUsersInDepartment(func(test string) bool { return true })
+	return s.GetActiveUsersInDepartment(func(test Department) bool { return true })
 }
 
 func (s *Site) GetActiveNonStaff() map[int]*User {
-	return s.GetActiveUsersInDepartment(func(test string) bool {
-		return strings.HasPrefix(test, s.config.VisitorDeptPrefix) || strings.HasPrefix(test, s.config.ContractorDeptPrefix) || strings.HasPrefix(test, s.config.CleanerDeptPrefix)
+	return s.GetActiveUsersInDepartment(func(test Department) bool {
+		return strings.HasPrefix(test.Name, s.config.VisitorDeptPrefix) || strings.HasPrefix(test.Name, s.config.ContractorDeptPrefix) || strings.HasPrefix(test.Name, s.config.CleanerDeptPrefix)
 	})
 }
 

@@ -97,6 +97,11 @@ func (s *Server) GetRoutes() *chi.Mux {
 					r.Get("/activevisitorstoday", s.getActiveVisitorsToday)
 					r.Get("/activenonstaff", s.getActiveNonStaff)
 					r.Get("/cancelled", s.getCancelledUsers)
+					r.Get("/visitors", s.getVisitors)
+					r.Get("/contractors", s.getContractors)
+					r.Get("/cleaners", s.getCleaners)
+					r.Get("/customers", s.getCustomers)
+					r.Get("/staff", s.getStaff)
 					r.With(s.validateUserID).Route("/{userID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getUser)
 						r.Get("/picture", s.getUserPicture)
@@ -261,6 +266,36 @@ func (s *Server) getCancelledUsers(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, s.Sites.GetSite(siteID).GetCancelledUsers())
+}
+
+func (s *Server) getVisitors(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, s.Sites.GetSite(siteID).GetVisitors())
+}
+
+func (s *Server) getContractors(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, s.Sites.GetSite(siteID).GetContractors())
+}
+
+func (s *Server) getCleaners(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, s.Sites.GetSite(siteID).GetCleaners())
+}
+
+func (s *Server) getCustomers(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, s.Sites.GetSite(siteID).GetCustomers())
+}
+
+func (s *Server) getStaff(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, s.Sites.GetSite(siteID).GetStaff())
 }
 
 func (s *Server) getDoors(w http.ResponseWriter, r *http.Request) {
