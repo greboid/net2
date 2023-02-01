@@ -164,7 +164,7 @@ func (s *Site) GetActiveUsers() map[int]*User {
 
 func (s *Site) GetActiveNonStaff() map[int]*User {
 	return s.GetActiveUsersInDepartment(func(test Department) bool {
-		return strings.HasPrefix(test.Name, s.config.VisitorDeptPrefix) || strings.HasPrefix(test.Name, s.config.ContractorDeptPrefix) || strings.HasPrefix(test.Name, s.config.CleanerDeptPrefix)
+		return strings.HasPrefix(test.Name, s.config.VisitorDeptPrefix) || strings.HasPrefix(test.Name, s.config.ContractorDeptPrefix) || strings.HasPrefix(test.Name, s.config.CleanerDeptPrefix) || strings.HasPrefix(test.Name, s.config.CustomerDeptPrefix)
 	})
 }
 
