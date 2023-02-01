@@ -469,11 +469,11 @@ func (s *Site) getLocalFieldName() string {
 }
 
 func (s *Site) UpdateUser(userID int) error {
-	return s.updateUsersWithData(fmt.Sprintf("SELECT *, %s as LocalID FROM UsersEx WHERE userID=%d", s.LocalIDField, userID))
+	return s.updateUsersWithData(fmt.Sprintf("SELECT *, %s as LocalID FROM UsersEx WHERE userID=%d AND Active=1", s.LocalIDField, userID))
 }
 
 func (s *Site) UpdateUsers() error {
-	return s.updateUsersWithData(fmt.Sprintf("SELECT *, %s as LocalID FROM UsersEx", s.LocalIDField))
+	return s.updateUsersWithData(fmt.Sprintf("SELECT *, %s as LocalID FROM UsersEx WHERE Active=1", s.LocalIDField))
 }
 
 func (s *Site) updateUsersWithData(query string) error {
