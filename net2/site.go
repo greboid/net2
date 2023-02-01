@@ -70,22 +70,22 @@ func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 	return body, nil
 }
 
-func (s *Site) GetActiveUsersInDepartment(prefix string) map[int]*User {
+func (s *Site) GetActiveUsersInDepartment(match func(test string) bool) map[int]*User {
 	today := time.Now()
 	midnight := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
 	return lo.PickBy(s.Users, func(_ int, user *User) bool {
 		return lo.CountBy(user.Departments, func(department Department) bool {
-			return strings.HasPrefix(department.Name, prefix)
+			return match(department.Name)
 		}) > 0 && (user.Expiry.After(midnight) || user.Expiry == time.Time{})
 	})
 }
 
-func (s *Site) GetTodaysActiveUsersInDepartment(prefix string) map[int]*User {
+func (s *Site) GetTodaysActiveUsersInDepartment(match func(test string) bool) map[int]*User {
 	today := time.Now()
 	midnight := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
 	return lo.PickBy(s.Users, func(_ int, user *User) bool {
 		return lo.CountBy(user.Departments, func(department Department) bool {
-			return strings.HasPrefix(department.Name, prefix)
+			return match(department.Name)
 		}) > 0 && user.LastUpdated.After(midnight)
 	})
 }
@@ -99,27 +99,33 @@ func (s *Site) GetCancelledUsers() interface{} {
 }
 
 func (s *Site) GetActiveStaffToday() map[int]*User {
-	return s.GetTodaysActiveUsersInDepartment(s.config.StaffDeptPrefix)
+	return s.GetTodaysActiveUsersInDepartment(func(test string) bool { return strings.HasPrefix(test, s.config.StaffDeptPrefix) })
 }
 
 func (s *Site) GetActiveStaff() map[int]*User {
-	return s.GetActiveUsersInDepartment(s.config.StaffDeptPrefix)
+	return s.GetActiveUsersInDepartment(func(test string) bool { return strings.HasPrefix(test, s.config.StaffDeptPrefix) })
 }
 
 func (s *Site) GetActiveVisitorsToday() map[int]*User {
-	return s.GetTodaysActiveUsersInDepartment(s.config.VisitorDeptPrefix)
+	return s.GetTodaysActiveUsersInDepartment(func(test string) bool { return strings.HasPrefix(test, s.config.VisitorDeptPrefix) })
 }
 
 func (s *Site) GetActiveVisitors() map[int]*User {
-	return s.GetActiveUsersInDepartment(s.config.VisitorDeptPrefix)
+	return s.GetActiveUsersInDepartment(func(test string) bool { return strings.HasPrefix(test, s.config.VisitorDeptPrefix) })
 }
 
 func (s *Site) GetActiveUsersToday() map[int]*User {
-	return s.GetTodaysActiveUsersInDepartment("")
+	return s.GetTodaysActiveUsersInDepartment(func(test string) bool { return true })
 }
 
 func (s *Site) GetActiveUsers() map[int]*User {
-	return s.GetActiveUsersInDepartment("")
+	return s.GetActiveUsersInDepartment(func(test string) bool { return true })
+}
+
+func (s *Site) GetActiveNonStaff() map[int]*User {
+	return s.GetActiveUsersInDepartment(func(test string) bool {
+		return strings.HasPrefix(test, s.config.VisitorDeptPrefix) || strings.HasPrefix(test, s.config.ContractorDeptPrefix) || strings.HasPrefix(test, s.config.CleanerDeptPrefix)
+	})
 }
 
 func (s *Site) GetDoors() map[uint64]*Door {
