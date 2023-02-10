@@ -129,3 +129,10 @@ type deviceSQLQuery struct {
 	ID     int `json:"Address"`
 	Status int `json:"StatusFlag"`
 }
+
+type userToken struct {
+	ID         int    `json:"id"`
+	TokenType  string `json:"tokenType"`
+	TokenValue string `json:"tokenValue"`
+	Lost       bool   `json:"isLost"`
+}
