@@ -71,7 +71,6 @@ type User struct {
 	Surname           string            `json:"lastName"`
 	Custom            []UserCustomField `json:"customFields,omitempty"`
 	PIN               string            `json:"pin"`
-	HasImage          bool              `json:"hasImage"`
 	Departments       []Department      `json:"department"`
 	LocalID           string
 	LastKnownLocation string
