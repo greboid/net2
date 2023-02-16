@@ -659,7 +659,7 @@ func (s *Site) updateAreas() (map[int]*AccessLevel, error) {
 		return nil, err
 	}
 	moo := lo.SliceToMap[*Area, int, *AccessLevel](accesslevels, func(item *Area) (int, *AccessLevel) {
-		return item.ID, &AccessLevel{ID: item.ID, Name: "Idv: " + item.Name}
+		return 10000 + item.ID, &AccessLevel{ID: 10000 + item.ID, Name: "Idv: " + item.Name}
 	})
 	return moo, nil
 }
