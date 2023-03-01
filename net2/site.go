@@ -81,13 +81,15 @@ func (s *Site) GetUsersInDepartment(departmentMatch func(test Department) bool, 
 func (s *Site) GetActiveUsersInDepartment(match func(test Department) bool) map[int]*User {
 	today := time.Now()
 	midnight := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
-	return s.GetUsersInDepartment(match, func(test *User) bool { return test.Expiry.After(midnight) || test.Expiry == time.Time{} })
+	return s.GetUsersInDepartment(match, func(test *User) bool {
+		return test.Expiry.After(midnight) || test.Expiry.Equal(midnight) || test.Expiry == time.Time{}
+	})
 }
 
 func (s *Site) GetTodaysActiveUsersInDepartment(match func(test Department) bool) map[int]*User {
 	today := time.Now()
 	midnight := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
-	return s.GetUsersInDepartment(match, func(test *User) bool { return test.LastUpdated.After(midnight) })
+	return s.GetUsersInDepartment(match, func(test *User) bool { return test.Expiry.After(midnight) })
 }
 
 func (s *Site) GetCancelledUsers() interface{} {
