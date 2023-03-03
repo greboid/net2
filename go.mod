@@ -6,7 +6,7 @@ require (
 	github.com/csmith/envflag v1.0.0
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/go-chi/render v1.0.2
-	github.com/go-co-op/gocron v1.18.0
+	github.com/go-co-op/gocron v1.18.1
 	github.com/rs/zerolog v1.29.0
 	github.com/samber/lo v1.37.0
 	golang.org/x/oauth2 v0.5.0
@@ -17,7 +17,6 @@ require (
 require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
