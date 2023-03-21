@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/render v1.0.2
 	github.com/go-co-op/gocron v1.19.0
 	github.com/rs/zerolog v1.29.0
-	github.com/samber/lo v1.37.0
+	github.com/samber/lo v1.38.1
 	golang.org/x/oauth2 v0.6.0
 	golang.org/x/sync v0.1.0
 	gopkg.in/yaml.v3 v3.0.1
