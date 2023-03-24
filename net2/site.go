@@ -209,6 +209,36 @@ func (s *Site) OpenDoor(doorID uint64) error {
 	return nil
 }
 
+func (s *Site) OpenDoorWithRelay(doorID uint64, secondRelay bool) error {
+	var relay string
+	if secondRelay {
+		relay = "Relay2"
+	} else {
+		relay = "Relay1"
+	}
+	jsonBytes, _ := json.Marshal(map[string]interface{}{
+		"doorId": doorID,
+		"RelayFunction": map[string]interface{}{
+			"RelayId":       relay,
+			"RelayAction":   "TimedOpen",
+			"RelayOpenTime": 1000,
+		},
+	})
+	_, ok := s.Doors[doorID]
+	if !ok {
+		return errors.New("invalid door")
+	}
+	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/door/control", s.BaseURL), bytes.NewReader(jsonBytes))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		log.Error().Int("Status", resp.StatusCode).Msg("Unable to close door")
+		return errors.New("unable to open door")
+	}
+	return nil
+}
+
 func (s *Site) CloseDoor(doorID uint64) error {
 	jsonBytes, _ := json.Marshal(map[string]uint64{"doorId": doorID})
 	_, ok := s.Doors[doorID]

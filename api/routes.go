@@ -84,6 +84,8 @@ func (s *Server) GetRoutes() *chi.Mux {
 					r.With(s.validateDoorID).Route("/{doorID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getDoor)
 						r.Post("/open", s.openDoor)
+						r.Post("/relay1", s.relay1)
+						r.Post("/relay2", s.relay2)
 						r.Post("/close", s.closeDoor)
 					})
 				})
@@ -327,6 +329,32 @@ func (s *Server) openDoor(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	doorID, _ := strconv.Atoi(chi.URLParam(r, "doorID"))
 	err := s.Sites.GetSite(siteID).OpenDoor(uint64(doorID))
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, MessageResponse{Error: "Error opening door"})
+		return
+	}
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, MessageResponse{Message: "Door opened"})
+}
+
+func (s *Server) relay1(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	doorID, _ := strconv.Atoi(chi.URLParam(r, "doorID"))
+	err := s.Sites.GetSite(siteID).OpenDoorWithRelay(uint64(doorID), false)
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, MessageResponse{Error: "Error opening door"})
+		return
+	}
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, MessageResponse{Message: "Door opened"})
+}
+
+func (s *Server) relay2(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	doorID, _ := strconv.Atoi(chi.URLParam(r, "doorID"))
+	err := s.Sites.GetSite(siteID).OpenDoorWithRelay(uint64(doorID), true)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error opening door"})
