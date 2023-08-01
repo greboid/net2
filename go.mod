@@ -6,7 +6,7 @@ require (
 	github.com/csmith/envflag v1.0.0
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-chi/render v1.0.3
-	github.com/go-co-op/gocron v1.30.1
+	github.com/go-co-op/gocron v1.31.0
 	github.com/rs/zerolog v1.30.0
 	github.com/samber/lo v1.38.1
 	golang.org/x/oauth2 v0.10.0
