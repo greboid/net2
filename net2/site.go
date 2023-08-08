@@ -21,8 +21,11 @@ const (
 	JsonContentType = "application/json"
 )
 
-//go:embed nophoto.png
-var nophoto []byte
+//go:embed photoneeded.png
+var photoneeded []byte
+
+//go:embed blank.gif
+var blank []byte
 
 func (s *Site) Start() error {
 	s.Users = make(map[int]*User, 0)
@@ -58,7 +61,7 @@ func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return nophoto, nil
+		return photoneeded, nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New("user not found")
@@ -68,6 +71,10 @@ func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 		_ = resp.Body.Close()
 	}()
 	return body, nil
+}
+
+func (s *Site) GetBlankPicture() ([]byte, error) {
+	return blank, nil
 }
 
 func (s *Site) GetUsersInDepartment(departmentMatch func(test Department) bool, userMatch func(test *User) bool) map[int]*User {

@@ -104,6 +104,7 @@ func (s *Server) GetRoutes() *chi.Mux {
 					r.Get("/cleaners", s.getCleaners)
 					r.Get("/customers", s.getCustomers)
 					r.Get("/staff", s.getStaff)
+					r.Get("/blankpicture", s.getBlankPicture)
 					r.With(s.validateUserID).Route("/{userID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getUser)
 						r.Get("/picture", s.getUserPicture)
@@ -206,6 +207,20 @@ func (s *Server) getUserPicture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/jpeg")
+	render.Status(r, http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(picture)
+}
+
+func (s *Server) getBlankPicture(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	picture, err := s.Sites.GetSite(siteID).GetBlankPicture()
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, MessageResponse{Error: "Error getting picture"})
+		return
+	}
+	w.Header().Set("Content-Type", "image/gif")
 	render.Status(r, http.StatusOK)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(picture)
