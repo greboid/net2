@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -57,6 +58,31 @@ func (s *Site) GetUsers() map[int]*User {
 
 func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 	resp, err := s.doGet(fmt.Sprintf("%s/api/v1/users/%d/image", s.BaseURL, userID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return photoneeded, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("user not found")
+	}
+	body, err := io.ReadAll(resp.Body)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	return body, nil
+}
+
+func (s *Site) GetUserPictureByLocalID(localID int) ([]byte, error) {
+	var localIDString = strconv.Itoa(localID)
+	var userIDs = lo.PickBy(s.Users, func(_ int, user *User) bool {
+		return user.LocalID == localIDString
+	})
+	if len(userIDs) != 1 {
+		return nil, errors.New("user not found")
+	}
+	resp, err := s.doGet(fmt.Sprintf("%s/api/v1/users/%s/image", s.BaseURL, userIDs[0].LocalID))
 	if err != nil {
 		return nil, err
 	}

@@ -105,6 +105,7 @@ func (s *Server) GetRoutes() *chi.Mux {
 					r.Get("/customers", s.getCustomers)
 					r.Get("/staff", s.getStaff)
 					r.Get("/blankpicture", s.getBlankPicture)
+					r.Get("/userpicturebylocalid/{localID:[0-9]+}", s.getUserPictureByLocalID)
 					r.With(s.validateUserID).Route("/{userID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getUser)
 						r.Get("/picture", s.getUserPicture)
@@ -201,6 +202,21 @@ func (s *Server) getUserPicture(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	picture, err := s.Sites.GetSite(siteID).GetUserPicture(userID)
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, MessageResponse{Error: "Error getting picture"})
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	render.Status(r, http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(picture)
+}
+
+func (s *Server) getUserPictureByLocalID(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	localID, _ := strconv.Atoi(chi.URLParam(r, "localID"))
+	picture, err := s.Sites.GetSite(siteID).GetUserPictureByLocalID(localID)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, MessageResponse{Error: "Error getting picture"})
