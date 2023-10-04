@@ -77,15 +77,11 @@ func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 func (s *Site) GetUserPictureByLocalID(localID int) ([]byte, error) {
 	var localIDString = strconv.Itoa(localID)
 	var userIDs = lo.Values(lo.PickBy(s.Users, func(_ int, user *User) bool {
-		if user.LocalID == localIDString {
-			fmt.Printf("User found: %v", user)
-		}
 		return user.LocalID == localIDString
 	}))
 	if len(userIDs) != 1 {
 		return nil, errors.New("user not found")
 	}
-	fmt.Printf("Users %v", userIDs[0])
 	resp, err := s.doGet(fmt.Sprintf("%s/api/v1/users/%d/image", s.BaseURL, userIDs[0].ID))
 	if err != nil {
 		return nil, err
