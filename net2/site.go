@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-co-op/gocron"
-	"github.com/greboid/net2/api"
 	"github.com/greboid/net2/config"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
@@ -350,7 +349,7 @@ func (s *Site) ResetAntiPassback(userID int) error {
 
 func (s *Site) ActivateUser(userID int) error {
 	return s.UpdateUserInfo(userID, map[string]interface{}{
-		"ExpiryDate": api.GetTomorrow(),
+		"ExpiryDate": GetTomorrow(),
 	})
 }
 
@@ -820,4 +819,14 @@ func (s *Site) UpdateDepartments() error {
 		return item.ID, item
 	})
 	return nil
+}
+
+func GetTomorrow() time.Time {
+	now := time.Now()
+	return time.Date(now.Year(), now.Month(), now.Day()+1, 23, 59, 0, 0, time.Local)
+}
+
+func GetYesterday() time.Time {
+	now := time.Now()
+	return time.Date(now.Year(), now.Month(), now.Day()-1, 23, 59, 0, 0, time.Local)
 }
