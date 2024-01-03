@@ -208,11 +208,15 @@ func (s *Site) GetDoors() map[uint64]*Door {
 }
 
 func (s *Site) GetMonitoredDoors() map[uint64]*Door {
-	return lo.PickBy(s.Doors, func(_ uint64, door *Door) bool {
+	doors := lo.PickBy(s.Doors, func(_ uint64, door *Door) bool {
 		return lo.CountBy(s.config.MonitoredDoors, func(monitoredDoor config.MonitoredDoor) bool {
 			return uint64(monitoredDoor.ID) == door.ID
 		}) > 0
 	})
+	lo.ForEach(s.config.MonitoredDoors, func(item config.MonitoredDoor, index int) {
+		doors[uint64(item.ID)].Name = item.Name
+	})
+	return doors
 }
 
 func (s *Site) GetOpenableDoors() map[string][]config.DoorSequence {
