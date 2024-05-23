@@ -7,7 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/go-chi/render v1.0.3
 	github.com/go-co-op/gocron v1.37.0
-	github.com/rs/zerolog v1.32.0
+	github.com/rs/zerolog v1.33.0
 	github.com/samber/lo v1.39.0
 	golang.org/x/oauth2 v0.20.0
 	golang.org/x/sync v0.7.0
