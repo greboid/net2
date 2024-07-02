@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/csmith/envflag v1.0.0
-	github.com/go-chi/chi/v5 v5.0.14
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/render v1.0.3
 	github.com/go-co-op/gocron v1.37.0
 	github.com/rs/zerolog v1.33.0
