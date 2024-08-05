@@ -9,7 +9,7 @@ require (
 	github.com/go-co-op/gocron v1.37.0
 	github.com/rs/zerolog v1.33.0
 	github.com/samber/lo v1.46.0
-	golang.org/x/oauth2 v0.21.0
+	golang.org/x/oauth2 v0.22.0
 	golang.org/x/sync v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
