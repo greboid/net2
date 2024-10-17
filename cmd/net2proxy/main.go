@@ -33,7 +33,7 @@ func main() {
 }
 
 func run(sites []*net2.Site, apiPort int, logger *zerolog.Logger) {
-	log.Info().Msg("Starting net2 proxy")
+	log.Info().Msgf("Starting net2 proxy on port %d", apiPort)
 	log.Info().Str("Sites", strings.Join(lo.Map(sites, func(item *net2.Site, index int) string {
 		return fmt.Sprintf("%s", item.Name)
 	}), ",")).Msg("Loaded sites")

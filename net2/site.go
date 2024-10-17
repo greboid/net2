@@ -335,6 +335,10 @@ func (s *Site) doGet(url string) (*http.Response, error) {
 	return s.doRequest(http.MethodGet, url, nil)
 }
 
+func (s *Site) doDelete(url string, body io.Reader) (*http.Response, error) {
+	return s.doRequest(http.MethodDelete, url, body)
+}
+
 func (s *Site) ResetAntiPassback(userID int) error {
 	jsonBytes, _ := json.Marshal(map[string]int{"userId": userID})
 	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/antipassback/reset", s.BaseURL), bytes.NewReader(jsonBytes))
@@ -429,6 +433,24 @@ func (s *Site) UpdateUserAccessLevel(userID int, accesslevel int) error {
 		newAccessLevel = []int{accesslevel}
 	}
 	return s.UpdateUserAccessLevels(userID, newAccessLevel)
+}
+
+func (s *Site) DeleteUser(id int) error {
+	info := []int{id}
+	jsonBytes, err := json.Marshal(info)
+	if err != nil {
+		return err
+	}
+	resp, err := s.doDelete(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/users"), bytes.NewReader(jsonBytes))
+	if err != nil {
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to delete user")
+		return errors.New("unable to delete user")
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to delete user")
+		return errors.New("unable to delete user")
+	}
+	return s.UpdateUsers()
 }
 
 func (s *Site) SetUserAccessLevel(userID int, accesslevel int) error {

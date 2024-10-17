@@ -119,6 +119,7 @@ func (s *Server) GetRoutes() *chi.Mux {
 						r.Post("/addaccesslevel", s.addAccessLevel)
 						r.Post("/removeaccesslevel", s.removeAccessLevel)
 						r.Post("/changedepartment", s.changeDepartment)
+						r.Delete("/delete", s.DeleteUser)
 					})
 				})
 			})
@@ -677,6 +678,19 @@ func (s *Server) changeDepartment(w http.ResponseWriter, r *http.Request) {
 	}
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, MessageResponse{Message: "User department set"})
+}
+
+func (s *Server) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
+	err := s.Sites.GetSite(siteID).DeleteUser(userID)
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, MessageResponse{Error: "error deleting user"})
+		return
+	}
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, MessageResponse{Message: "User deleted"})
 }
 
 func GetTomorrow() time.Time {
