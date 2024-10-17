@@ -335,10 +335,6 @@ func (s *Site) doGet(url string) (*http.Response, error) {
 	return s.doRequest(http.MethodGet, url, nil)
 }
 
-func (s *Site) doDelete(url string, body io.Reader) (*http.Response, error) {
-	return s.doRequest(http.MethodDelete, url, body)
-}
-
 func (s *Site) ResetAntiPassback(userID int) error {
 	jsonBytes, _ := json.Marshal(map[string]int{"userId": userID})
 	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/antipassback/reset", s.BaseURL), bytes.NewReader(jsonBytes))
@@ -433,24 +429,6 @@ func (s *Site) UpdateUserAccessLevel(userID int, accesslevel int) error {
 		newAccessLevel = []int{accesslevel}
 	}
 	return s.UpdateUserAccessLevels(userID, newAccessLevel)
-}
-
-func (s *Site) DeleteUser(id int) error {
-	info := []int{id}
-	jsonBytes, err := json.Marshal(info)
-	if err != nil {
-		return err
-	}
-	resp, err := s.doDelete(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/users"), bytes.NewReader(jsonBytes))
-	if err != nil {
-		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to delete user")
-		return errors.New("unable to delete user")
-	}
-	if resp.StatusCode != http.StatusNoContent {
-		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to delete user")
-		return errors.New("unable to delete user")
-	}
-	return s.UpdateUsers()
 }
 
 func (s *Site) SetUserAccessLevel(userID int, accesslevel int) error {
@@ -623,42 +601,40 @@ func (s *Site) updateUsersWithData(query string) error {
 	if err != nil {
 		return err
 	}
-	users := make(map[int]*User)
 	for id := range data {
 		userID := data[id].ID
-		if _, ok := users[userID]; !ok {
-			users[userID] = &User{}
+		if _, ok := s.Users[userID]; !ok {
+			s.Users[userID] = &User{}
 		}
-		users[userID].ID = data[id].ID
+		s.Users[userID].ID = data[id].ID
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ActivateDate, time.Local); err == nil {
-			users[userID].Activated = updatedTime
+			s.Users[userID].Activated = updatedTime
 		} else {
-			users[userID].Activated, _ = time.Parse("2006-02-01", "0001-01-01")
+			s.Users[userID].Activated, _ = time.Parse("2006-02-01", "0001-01-01")
 		}
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ExpiryDate, time.Local); err == nil {
-			users[userID].Expiry = updatedTime
+			s.Users[userID].Expiry = updatedTime
 		} else {
-			users[userID].Expiry, _ = time.Parse("2006-02-01", "0001-01-01")
+			s.Users[userID].Expiry, _ = time.Parse("2006-02-01", "0001-01-01")
 		}
-		users[userID].FirstName = data[id].Firstname
-		users[userID].Surname = data[id].Surname
-		users[userID].PIN = data[id].PIN
-		users[userID].GUID = data[id].UserGUID
+		s.Users[userID].FirstName = data[id].Firstname
+		s.Users[userID].Surname = data[id].Surname
+		s.Users[userID].PIN = data[id].PIN
+		s.Users[userID].GUID = data[id].UserGUID
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].LastAccessTime, time.Local); err == nil {
-			users[userID].LastUpdated = updatedTime
+			s.Users[userID].LastUpdated = updatedTime
 		} else {
-			users[userID].LastUpdated, _ = time.Parse("2006-02-01", "0001-01-01")
+			s.Users[userID].LastUpdated, _ = time.Parse("2006-02-01", "0001-01-01")
 		}
-		users[userID].LastKnownLocation = data[id].LastLocation
-		users[userID].Departments = []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}}
+		s.Users[userID].LastKnownLocation = data[id].LastLocation
+		s.Users[userID].Departments = []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}}
 		if strings.HasPrefix(data[id].AccessLevelName, "Individual: ") {
-			users[userID].AccessLevels = s.getExactAccessLevel(data[id])
+			s.Users[userID].AccessLevels = s.getExactAccessLevel(data[id])
 		} else {
-			users[userID].AccessLevels = []string{data[id].AccessLevelName}
+			s.Users[userID].AccessLevels = []string{data[id].AccessLevelName}
 		}
-		users[userID].LocalID = data[id].LocalID
+		s.Users[userID].LocalID = data[id].LocalID
 	}
-	s.Users = users
 	return nil
 }
 
