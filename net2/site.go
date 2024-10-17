@@ -623,40 +623,42 @@ func (s *Site) updateUsersWithData(query string) error {
 	if err != nil {
 		return err
 	}
+	users := make(map[int]*User)
 	for id := range data {
 		userID := data[id].ID
-		if _, ok := s.Users[userID]; !ok {
-			s.Users[userID] = &User{}
+		if _, ok := users[userID]; !ok {
+			users[userID] = &User{}
 		}
-		s.Users[userID].ID = data[id].ID
+		users[userID].ID = data[id].ID
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ActivateDate, time.Local); err == nil {
-			s.Users[userID].Activated = updatedTime
+			users[userID].Activated = updatedTime
 		} else {
-			s.Users[userID].Activated, _ = time.Parse("2006-02-01", "0001-01-01")
+			users[userID].Activated, _ = time.Parse("2006-02-01", "0001-01-01")
 		}
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ExpiryDate, time.Local); err == nil {
-			s.Users[userID].Expiry = updatedTime
+			users[userID].Expiry = updatedTime
 		} else {
-			s.Users[userID].Expiry, _ = time.Parse("2006-02-01", "0001-01-01")
+			users[userID].Expiry, _ = time.Parse("2006-02-01", "0001-01-01")
 		}
-		s.Users[userID].FirstName = data[id].Firstname
-		s.Users[userID].Surname = data[id].Surname
-		s.Users[userID].PIN = data[id].PIN
-		s.Users[userID].GUID = data[id].UserGUID
+		users[userID].FirstName = data[id].Firstname
+		users[userID].Surname = data[id].Surname
+		users[userID].PIN = data[id].PIN
+		users[userID].GUID = data[id].UserGUID
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].LastAccessTime, time.Local); err == nil {
-			s.Users[userID].LastUpdated = updatedTime
+			users[userID].LastUpdated = updatedTime
 		} else {
-			s.Users[userID].LastUpdated, _ = time.Parse("2006-02-01", "0001-01-01")
+			users[userID].LastUpdated, _ = time.Parse("2006-02-01", "0001-01-01")
 		}
-		s.Users[userID].LastKnownLocation = data[id].LastLocation
-		s.Users[userID].Departments = []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}}
+		users[userID].LastKnownLocation = data[id].LastLocation
+		users[userID].Departments = []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}}
 		if strings.HasPrefix(data[id].AccessLevelName, "Individual: ") {
-			s.Users[userID].AccessLevels = s.getExactAccessLevel(data[id])
+			users[userID].AccessLevels = s.getExactAccessLevel(data[id])
 		} else {
-			s.Users[userID].AccessLevels = []string{data[id].AccessLevelName}
+			users[userID].AccessLevels = []string{data[id].AccessLevelName}
 		}
-		s.Users[userID].LocalID = data[id].LocalID
+		users[userID].LocalID = data[id].LocalID
 	}
+	s.Users = users
 	return nil
 }
 
