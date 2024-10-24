@@ -2,6 +2,7 @@ package net2
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/greboid/net2/config"
@@ -52,7 +53,13 @@ func getHttpClient(clientID string, username string, password string, baseURL st
 			"scope":      {"offline_access"},
 		},
 	}
-	httpClient := oauth2.NewClient(context.Background(), oauthConfig.TokenSource(context.Background()))
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	sslcli := &http.Client{Transport: tr}
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, sslcli)
+	httpClient := oauth2.NewClient(ctx, oauthConfig.TokenSource(ctx))
 	return httpClient
 }
 
