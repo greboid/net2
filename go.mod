@@ -10,7 +10,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/samber/lo v1.49.1
 	golang.org/x/oauth2 v0.26.0
-	golang.org/x/sync v0.10.0
+	golang.org/x/sync v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
