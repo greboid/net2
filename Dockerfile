@@ -6,7 +6,7 @@ COPY . /app
 ENV GOBIN /build
 RUN CGO_ENABLED=0 GOOS=linux go install -a -trimpath -ldflags="-extldflags \"-static\" -buildid= -s -w" ./...
 
-FROM ghcr.io/greboid/dockerbase/nonroot:1.20250110.0
+FROM ghcr.io/greboid/dockerbase/nonroot:1.20250214.0
 
 WORKDIR /
 COPY --from=build /build/net2proxy /net2proxy
