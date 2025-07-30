@@ -32,7 +32,7 @@ func (s *Server) listenAndServe() error {
 }
 
 func (s *Server) waitForShutdown() error {
-	signals := make(chan os.Signal)
+	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, os.Kill)
 	<-signals
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

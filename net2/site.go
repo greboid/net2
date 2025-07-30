@@ -610,12 +610,13 @@ func (s *Site) updateUsersWithData(query string) error {
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ActivateDate, time.Local); err == nil {
 			s.Users[userID].Activated = updatedTime
 		} else {
-			s.Users[userID].Activated, _ = time.Parse("2006-02-01", "0001-01-01")
+			s.Users[userID].Activated, _ = time.Parse(""+
+				"2006-01-02", "0001-01-01")
 		}
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ExpiryDate, time.Local); err == nil {
 			s.Users[userID].Expiry = updatedTime
 		} else {
-			s.Users[userID].Expiry, _ = time.Parse("2006-02-01", "0001-01-01")
+			s.Users[userID].Expiry, _ = time.Parse("2006-01-02", "0001-01-01")
 		}
 		s.Users[userID].FirstName = data[id].Firstname
 		s.Users[userID].Surname = data[id].Surname
@@ -624,7 +625,7 @@ func (s *Site) updateUsersWithData(query string) error {
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].LastAccessTime, time.Local); err == nil {
 			s.Users[userID].LastUpdated = updatedTime
 		} else {
-			s.Users[userID].LastUpdated, _ = time.Parse("2006-02-01", "0001-01-01")
+			s.Users[userID].LastUpdated, _ = time.Parse("2006-01-02", "0001-01-01")
 		}
 		s.Users[userID].LastKnownLocation = data[id].LastLocation
 		s.Users[userID].Departments = []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}}
