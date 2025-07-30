@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -186,7 +187,12 @@ func (s *Server) validateUserID(next http.Handler) http.Handler {
 func (s *Server) validateOpenableDoor(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-		doorName := chi.URLParam(r, "doorName")
+		doorName, err := url.QueryUnescape(chi.URLParam(r, "doorName"))
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, MessageResponse{Error: "invalid door name encoding"})
+			return
+		}
 		if doorName == "" {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, MessageResponse{Error: "doorName is required"})
@@ -703,7 +709,7 @@ func (s *Server) changeDepartment(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) openOpenableDoor(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	doorName := chi.URLParam(r, "doorName")
+	doorName, _ := url.QueryUnescape(chi.URLParam(r, "doorName"))
 	openableDoors := s.Sites.GetSite(siteID).GetOpenableDoors()
 	sequence := openableDoors[doorName]
 
