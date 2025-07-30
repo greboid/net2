@@ -80,6 +80,9 @@ func (s *Server) GetRoutes() *chi.Mux {
 					r.Get("/", s.getDoors)
 					r.Get("/monitored", s.getMonitoredDoors)
 					r.Get("/openable", s.getOpenableDoors)
+					r.With(s.validateOpenableDoor).Route("/openable/{doorName}", func(r chi.Router) {
+						r.Post("/open", s.openOpenableDoor)
+					})
 					r.Post("/sequence", s.sequenceDoors)
 					r.With(s.validateDoorID).Route("/{doorID:[0-9]+}", func(r chi.Router) {
 						r.Get("/", s.getDoor)
@@ -174,6 +177,25 @@ func (s *Server) validateUserID(next http.Handler) http.Handler {
 		if s.Sites.GetSite(siteID).GetUser(userID) == nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, MessageResponse{Error: "userID not found"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) validateOpenableDoor(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+		doorName := chi.URLParam(r, "doorName")
+		if doorName == "" {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, MessageResponse{Error: "doorName is required"})
+			return
+		}
+		openableDoors := s.Sites.GetSite(siteID).GetOpenableDoors()
+		if _, exists := openableDoors[doorName]; !exists {
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, MessageResponse{Error: "openable door not found"})
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -677,6 +699,28 @@ func (s *Server) changeDepartment(w http.ResponseWriter, r *http.Request) {
 	}
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, MessageResponse{Message: "User department set"})
+}
+
+func (s *Server) openOpenableDoor(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	doorName := chi.URLParam(r, "doorName")
+	openableDoors := s.Sites.GetSite(siteID).GetOpenableDoors()
+	sequence := openableDoors[doorName]
+
+	var doors []net2.DoorSequenceItem
+	for _, item := range sequence {
+		doors = append(doors, net2.DoorSequenceItem{
+			Door: uint64(item.ID),
+			Time: time.Duration(item.Duration),
+		})
+	}
+
+	go func() {
+		s.Sites.GetSite(siteID).SequenceDoor(doors...)
+	}()
+
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, MessageResponse{Message: "Openable door sequence triggered"})
 }
 
 func GetTomorrow() time.Time {
