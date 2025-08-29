@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
@@ -76,6 +77,9 @@ func (s *Server) GetRoutes() *chi.Mux {
 				})
 				r.Route("/departments", func(r chi.Router) {
 					r.Get("/", s.getDepartments)
+					r.With(s.validateDepartmentName).Route("/{departmentName}", func(r chi.Router) {
+						r.Post("/activate", s.activateDepartmentUsers)
+					})
 				})
 				r.Route("/doors", func(r chi.Router) {
 					r.Get("/", s.getDoors)
@@ -732,6 +736,80 @@ func (s *Server) openOpenableDoor(w http.ResponseWriter, r *http.Request) {
 func GetTomorrow() time.Time {
 	now := time.Now()
 	return time.Date(now.Year(), now.Month(), now.Day()+1, 23, 59, 0, 0, time.Local)
+}
+
+func (s *Server) validateDepartmentName(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+		departmentName, err := url.QueryUnescape(chi.URLParam(r, "departmentName"))
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, MessageResponse{Error: "invalid department name encoding"})
+			return
+		}
+		if departmentName == "" {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, MessageResponse{Error: "departmentName is required"})
+			return
+		}
+		departments := s.Sites.GetSite(siteID).GetDepartments()
+		found := false
+		for _, dept := range departments {
+			if dept.Name == departmentName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, MessageResponse{Error: "department not found"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) activateDepartmentUsers(w http.ResponseWriter, r *http.Request) {
+	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
+	departmentName, _ := url.QueryUnescape(chi.URLParam(r, "departmentName"))
+	
+	site := s.Sites.GetSite(siteID)
+	users := site.GetUsers()
+	
+	var activatedCount int
+	var failedCount int
+	
+	for _, user := range users {
+		inDepartment := false
+		for _, dept := range user.Departments {
+			if dept.Name == departmentName {
+				inDepartment = true
+				break
+			}
+		}
+		
+		if inDepartment {
+			err := site.ActivateUser(user.ID)
+			if err != nil {
+				log.Error().Err(err).Int("userID", user.ID).Str("department", departmentName).Msg("Failed to activate user")
+				failedCount++
+			} else {
+				activatedCount++
+			}
+		}
+	}
+	
+	if failedCount > 0 {
+		render.Status(r, http.StatusPartialContent)
+		render.JSON(w, r, MessageResponse{
+			Message: fmt.Sprintf("Activated %d users in department '%s', %d failed", activatedCount, departmentName, failedCount),
+		})
+	} else {
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, MessageResponse{
+			Message: fmt.Sprintf("Successfully activated %d users in department '%s'", activatedCount, departmentName),
+		})
+	}
 }
 
 func GetYesterday() time.Time {
