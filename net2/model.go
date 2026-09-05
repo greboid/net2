@@ -1,7 +1,7 @@
 package net2
 
 import (
-	"github.com/go-co-op/gocron"
+	"github.com/go-co-op/gocron/v2"
 	"github.com/greboid/net2/config"
 	"github.com/rs/zerolog"
 	"net/http"
