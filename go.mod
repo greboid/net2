@@ -3,7 +3,7 @@ module github.com/greboid/net2
 go 1.25.0
 
 require (
-	github.com/csmith/envflag v1.0.0
+	github.com/csmith/envflag/v2 v2.0.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-chi/render v1.0.3
 	github.com/go-co-op/gocron v1.37.0
