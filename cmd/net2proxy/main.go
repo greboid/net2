@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/csmith/envflag"
+	"github.com/csmith/envflag/v2"
 	"github.com/greboid/net2/api"
 	"github.com/greboid/net2/config"
 	"github.com/greboid/net2/net2"
