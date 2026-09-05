@@ -35,17 +35,31 @@ func (s *Site) Start() error {
 	s.Doors = make(map[uint64]*Door)
 	s.LocalIDField = s.getLocalFieldName()
 	if s.cron == nil {
-		s.cron = gocron.NewScheduler(time.Now().Location())
+		cron, err := gocron.NewScheduler(gocron.WithLocation(time.Now().Location()))
+		if err != nil {
+			return err
+		}
+		s.cron = cron
 	}
-	_, err := s.cron.Every("1m").Tag("siteupdate").Do(func() {
-		s.UpdateAll()
-	})
-	s.cron.StartAsync()
-	return err
+	_, err := s.cron.NewJob(
+		gocron.DurationJob(time.Minute),
+		gocron.NewTask(func() {
+			s.UpdateAll()
+		}),
+		gocron.WithTags("siteupdate"),
+	)
+	if err != nil {
+		return err
+	}
+	s.cron.Start()
+	return nil
 }
 
 func (s *Site) Stop() {
-	s.cron.Stop()
+	err := s.cron.Shutdown()
+	if err != nil {
+		log.Error().Err(err).Str("Site", s.Name).Msg("Error shutting down scheduler")
+	}
 }
 
 func (s *Site) GetUser(userID int) *User {

@@ -23,7 +23,7 @@ type Site struct {
 	portalIDField    int
 	logger           *zerolog.Logger
 	httpClient       *http.Client
-	cron             *gocron.Scheduler
+	cron             gocron.Scheduler
 	config           *config.SiteConfig
 	localIDFieldName string
 	updateLock       sync.Mutex
