@@ -1,6 +1,6 @@
 module github.com/greboid/net2
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/csmith/envflag/v2 v2.0.0
@@ -10,7 +10,7 @@ require (
 	github.com/rs/zerolog v1.35.1
 	github.com/samber/lo v1.53.0
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.23.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
