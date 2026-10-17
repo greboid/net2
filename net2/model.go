@@ -1,6 +1,7 @@
 package net2
 
 import (
+	"encoding/json"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/greboid/net2/config"
 	"github.com/rs/zerolog"
@@ -42,6 +43,24 @@ type Site struct {
 	SiteID           int                            `json:"ID"`
 	Name             string                         `json:"Name"`
 	LastPolled       time.Time                      `json:"lastPolled"`
+}
+
+// MarshalJSON serialises only the public summary fields, reading mutable
+// state under the state lock so API handlers can render sites concurrently
+// with update loops without racing.  The shape matches what the previous
+// tag-based marshaling produced ({ID, Name, lastPolled}).
+func (s *Site) MarshalJSON() ([]byte, error) {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
+	return json.Marshal(struct {
+		SiteID     int       `json:"ID"`
+		Name       string    `json:"Name"`
+		LastPolled time.Time `json:"lastPolled"`
+	}{
+		SiteID:     s.SiteID,
+		Name:       s.Name,
+		LastPolled: s.LastPolled,
+	})
 }
 
 type AccessLevel struct {

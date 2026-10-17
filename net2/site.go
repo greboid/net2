@@ -58,10 +58,24 @@ func (s *Site) Start() error {
 }
 
 func (s *Site) Stop() {
+	if s.cron == nil {
+		return
+	}
 	err := s.cron.Shutdown()
 	if err != nil {
 		log.Error().Err(err).Str("Site", s.Name).Msg("Error shutting down scheduler")
 	}
+}
+
+// GetUnknownTokens returns any unknown token events recorded for the site;
+// an empty (non-nil) slice when there are none so JSON renders as [].
+func (s *Site) GetUnknownTokens() []Event {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
+	if s.UnknownTokens == nil {
+		return []Event{}
+	}
+	return s.UnknownTokens
 }
 
 func (s *Site) GetUser(userID int) *User {
@@ -370,11 +384,25 @@ func drainBody(resp *http.Response) {
 }
 
 func (s *Site) doRequest(method string, url string, body io.Reader) (*http.Response, error) {
+	// Buffer the body up front so it can be replayed if the request has to
+	// be retried after re-authenticating; a consumed reader would otherwise
+	// send an empty body on the retry.
+	var bodyBytes []byte
+	var err error
+	if body != nil {
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var req *http.Request
 	var resp *http.Response
-	var err error
 	for tryReauth := 2; tryReauth > 0; tryReauth-- {
-		req, err = http.NewRequest(method, url, body)
+		if bodyBytes != nil {
+			req, err = http.NewRequest(method, url, bytes.NewReader(bodyBytes))
+		} else {
+			req, err = http.NewRequest(method, url, nil)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -426,10 +454,8 @@ func (s *Site) ActivateUser(userID int) error {
 }
 
 func (s *Site) DeactivateUser(userID int) error {
-	now := time.Now()
-	yesterday := time.Date(now.Year(), now.Month(), now.Day()-1, 23, 59, 59, 0, time.Local)
 	return s.UpdateUserInfo(userID, map[string]interface{}{
-		"ExpiryDate": yesterday,
+		"ExpiryDate": GetYesterday(),
 	})
 }
 
@@ -734,10 +760,12 @@ func (s *Site) updateUsersWithData(query string) error {
 		user.LocalID = data[id].LocalID
 		updates[user.ID] = user
 	}
+	// Publish the fresh map wholesale: entries that no longer appear in
+	// the query (e.g. users deactivated or removed on the Net2 side) must
+	// not linger in the cache.  Readers may hold on to the previous map,
+	// which stays valid because published maps are never mutated.
 	s.stateLock.Lock()
-	for id, user := range updates {
-		s.Users[id] = user
-	}
+	s.Users = updates
 	s.stateLock.Unlock()
 	return nil
 }
