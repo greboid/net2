@@ -35,17 +35,4 @@ jobs:
       - uses: actions/toolkit/docker-login@master
         with:
           audience: u:1:4aa2cbb2-4cab-44d3-b0d5-056eeda66035
-      - uses: actions/toolkit/docker-build@master
-  release:
-    if: github.ref_type == 'tag'
-    runs-on: alpine
-    needs:
-      - test
-      - race-test
-      - container
-    steps:
-      - uses: actions/toolkit/git-checkout@master
-      - uses: actions/toolkit/docker-login@master
-        with:
-          audience: u:1:4aa2cbb2-4cab-44d3-b0d5-056eeda66035
-      - uses: actions/toolkit/docker-build@master
+      - uses: actions/toolkit/docker-push@master
