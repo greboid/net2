@@ -11,9 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 )
 
 var (
@@ -37,8 +35,6 @@ func run(sites []*net2.Site, apiPort int, logger *zerolog.Logger) {
 	log.Info().Str("Sites", strings.Join(lo.Map(sites, func(item *net2.Site, index int) string {
 		return fmt.Sprintf("%s", item.Name)
 	}), ",")).Msg("Loaded sites")
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	siteManager := &net2.SiteManager{Logger: logger}
 	err := siteManager.Start(sites)
 	if err != nil {
