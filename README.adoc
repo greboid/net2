@@ -30,6 +30,8 @@ At the minute the config path is not configurable, it will look for config.yml i
 
 There should be at least one site present, the monitoredDoors are for alarm integration and are optional, openable doors are optional.
 
+Sites connect over plain HTTP by default.  If the Net2 API is served over HTTPS set `http: true` on the site (despite the name, this enables HTTPS).  The API port defaults to 8000 and the site port defaults to 8080.
+
 At present the monitored doors and openable doors fields aren't used by the API, but will be in the future.
 
 The departments are currently required, although I will be looking to make this more flexible:
@@ -47,9 +49,11 @@ The main differentiation here are for being able to easily distinguish between t
 apiport: <Defaults to 8000, optional>
 clientid: <Client ID issued by Paxton>
 sites:
-  - id: <numeric ID for the site>
+  - id: <numeric ID for the site, required>
     name: <Human readable name for the site>
     ip: <IP Address or hostname of the net2 server>
+    port: <Port of the net2 API, defaults to 8080, optional>
+    http: <Set to true to connect over plain HTTP, HTTPS is the default, optional>
     username: <Net2 Operator username>
     password: <Net2 Operator password>
     staffDepartmentPrefix: Staff
@@ -58,7 +62,7 @@ sites:
     visitorDepartmentPrefix: Visitors
     customerDepartmentPrefix: Customers
     cancelledDepartmentPrefix: Cancelled
-    localIDField: <Name of field in Net2 used to associated with internal system, optional>
+    localIDField: <Name of field in Net2 used to associated with internal system, required>
     monitoredDoors:
       - id: <door address>
         doorName: <Reception>

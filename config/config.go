@@ -45,7 +45,7 @@ func LoadConfig(file string) (*Config, error) {
 		if config.Sites[index].Port == 0 {
 			config.Sites[index].Port = 8080
 		}
-		if config.Sites[index].ID == -1 {
+		if config.Sites[index].ID <= 0 {
 			return nil, errors.New("id is required for site: " + config.Sites[index].Name)
 		}
 		if config.Sites[index].Username == "" {
