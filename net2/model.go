@@ -23,10 +23,12 @@ type Site struct {
 	portalIDField    int
 	logger           *zerolog.Logger
 	httpClient       *http.Client
+	clientMu         sync.Mutex
 	cron             gocron.Scheduler
 	config           *config.SiteConfig
 	localIDFieldName string
 	updateLock       sync.Mutex
+	stateLock        sync.RWMutex
 	clientID         string
 	LocalIDField     string                         `json:"-"`
 	AccessLevels     map[int]*AccessLevel           `json:"-"`

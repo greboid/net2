@@ -64,12 +64,15 @@ func getHttpClient(clientID string, username string, password string, baseURL st
 }
 
 type SiteManager struct {
+	mu      sync.RWMutex
 	started bool
 	sites   map[int]*Site
 	Logger  *zerolog.Logger
 }
 
 func (m *SiteManager) Start(sites []*Site) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.started {
 		return nil
 	}
@@ -93,6 +96,8 @@ func (m *SiteManager) Start(sites []*Site) error {
 }
 
 func (m *SiteManager) Stop() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if !m.started {
 		return
 	}
@@ -103,6 +108,8 @@ func (m *SiteManager) Stop() {
 }
 
 func (m *SiteManager) GetSite(id int) *Site {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if !m.started {
 		return nil
 	}
@@ -110,6 +117,8 @@ func (m *SiteManager) GetSite(id int) *Site {
 }
 
 func (m *SiteManager) GetSites() map[int]*Site {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if !m.started {
 		return nil
 	}
@@ -117,6 +126,8 @@ func (m *SiteManager) GetSites() map[int]*Site {
 }
 
 func (m *SiteManager) Count() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if !m.started {
 		return 0
 	}
@@ -126,8 +137,11 @@ func (m *SiteManager) Count() int {
 func (m *SiteManager) UpdateAll() {
 	start := time.Now()
 	log.Debug().Msg("Update all sites started")
+	m.mu.RLock()
+	sites := lo.Values(m.sites)
+	m.mu.RUnlock()
 	wg := new(sync.WaitGroup)
-	for _, site := range m.sites {
+	for _, site := range sites {
 		wg.Add(1)
 		go func(s *Site, wg *sync.WaitGroup) {
 			s.UpdateAll()

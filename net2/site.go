@@ -29,10 +29,12 @@ var photoneeded []byte
 var blank []byte
 
 func (s *Site) Start() error {
+	s.stateLock.Lock()
 	s.Users = make(map[int]*User, 0)
 	s.Departments = make(map[int]*Department)
 	s.AccessLevels = make(map[int]*AccessLevel)
 	s.Doors = make(map[uint64]*Door)
+	s.stateLock.Unlock()
 	s.LocalIDField = s.getLocalFieldName()
 	if s.cron == nil {
 		cron, err := gocron.NewScheduler(gocron.WithLocation(time.Now().Location()))
@@ -63,10 +65,14 @@ func (s *Site) Stop() {
 }
 
 func (s *Site) GetUser(userID int) *User {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	return s.Users[userID]
 }
 
 func (s *Site) GetUsers() map[int]*User {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	return s.Users
 }
 
@@ -75,6 +81,7 @@ func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode == http.StatusNotFound {
 		return photoneeded, nil
 	}
@@ -82,17 +89,16 @@ func (s *Site) GetUserPicture(userID int) ([]byte, error) {
 		return nil, errors.New("user not found")
 	}
 	body, err := io.ReadAll(resp.Body)
-	defer func() {
-		_ = resp.Body.Close()
-	}()
 	return body, nil
 }
 
 func (s *Site) GetUserPictureByLocalID(localID int) ([]byte, error) {
 	var localIDString = strconv.Itoa(localID)
+	s.stateLock.RLock()
 	var userIDs = lo.Values(lo.PickBy(s.Users, func(_ int, user *User) bool {
 		return user.LocalID == localIDString
 	}))
+	s.stateLock.RUnlock()
 	if len(userIDs) != 1 {
 		return nil, errors.New("user not found")
 	}
@@ -100,6 +106,7 @@ func (s *Site) GetUserPictureByLocalID(localID int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode == http.StatusNotFound {
 		return photoneeded, nil
 	}
@@ -107,9 +114,6 @@ func (s *Site) GetUserPictureByLocalID(localID int) ([]byte, error) {
 		return nil, errors.New("user not found")
 	}
 	body, err := io.ReadAll(resp.Body)
-	defer func() {
-		_ = resp.Body.Close()
-	}()
 	return body, nil
 }
 
@@ -118,6 +122,8 @@ func (s *Site) GetBlankPicture() ([]byte, error) {
 }
 
 func (s *Site) GetUsersInDepartment(departmentMatch func(test Department) bool, userMatch func(test *User) bool) map[int]*User {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	return lo.PickBy(s.Users, func(_ int, user *User) bool {
 		return lo.CountBy(user.Departments, func(department Department) bool {
 			return departmentMatch(department)
@@ -218,17 +224,25 @@ func (s *Site) GetActiveNonStaff() map[int]*User {
 }
 
 func (s *Site) GetDoors() map[uint64]*Door {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	return s.Doors
 }
 
 func (s *Site) GetMonitoredDoors() map[uint64]*Door {
+	s.stateLock.RLock()
 	doors := lo.PickBy(s.Doors, func(_ uint64, door *Door) bool {
 		return lo.CountBy(s.config.MonitoredDoors, func(monitoredDoor config.MonitoredDoor) bool {
 			return uint64(monitoredDoor.ID) == door.ID
 		}) > 0
 	})
+	s.stateLock.RUnlock()
 	lo.ForEach(s.config.MonitoredDoors, func(item config.MonitoredDoor, index int) {
-		doors[uint64(item.ID)].Name = item.Name
+		if val, ok := doors[uint64(item.ID)]; ok {
+			monitoredDoor := *val
+			monitoredDoor.Name = item.Name
+			doors[uint64(item.ID)] = &monitoredDoor
+		}
 	})
 	return doors
 }
@@ -240,19 +254,21 @@ func (s *Site) GetOpenableDoors() map[string][]config.DoorSequence {
 }
 
 func (s *Site) GetDoor(doorID uint64) *Door {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	return s.Doors[doorID]
 }
 
 func (s *Site) OpenDoor(doorID uint64) error {
 	jsonBytes, _ := json.Marshal(map[string]uint64{"doorId": doorID})
-	_, ok := s.Doors[doorID]
-	if !ok {
+	if !s.hasDoor(doorID) {
 		return errors.New("invalid door")
 	}
 	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/door/open", s.BaseURL), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode != 200 {
 		log.Error().Int("Status", resp.StatusCode).Msg("Unable to close door")
 		return errors.New("unable to open door")
@@ -275,14 +291,14 @@ func (s *Site) OpenDoorWithRelay(doorID uint64, secondRelay bool) error {
 			"RelayOpenTime": 1000,
 		},
 	})
-	_, ok := s.Doors[doorID]
-	if !ok {
+	if !s.hasDoor(doorID) {
 		return errors.New("invalid door")
 	}
 	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/door/control", s.BaseURL), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode != 200 {
 		log.Error().Int("Status", resp.StatusCode).Msg("Unable to close door")
 		return errors.New("unable to open door")
@@ -292,14 +308,14 @@ func (s *Site) OpenDoorWithRelay(doorID uint64, secondRelay bool) error {
 
 func (s *Site) CloseDoor(doorID uint64) error {
 	jsonBytes, _ := json.Marshal(map[string]uint64{"doorId": doorID})
-	_, ok := s.Doors[doorID]
-	if !ok {
+	if !s.hasDoor(doorID) {
 		return errors.New("invalid door")
 	}
 	resp, err := s.doPost(fmt.Sprintf("%s/api/v1/commands/door/close", s.BaseURL), bytes.NewReader(jsonBytes))
 	if err != nil {
 		return err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode != 200 {
 		log.Error().Int("Status", resp.StatusCode).Msg("Unable to close door")
 		return errors.New("unable to close door")
@@ -308,11 +324,49 @@ func (s *Site) CloseDoor(doorID uint64) error {
 }
 
 func (s *Site) GetAccessLevels() map[int]*AccessLevel {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	return s.AccessLevels
 }
 
 func (s *Site) GetDepartments() map[int]*Department {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	return s.Departments
+}
+
+// UpToDate reports whether the last successful full update was within the
+// last 3 minutes.
+func (s *Site) UpToDate() bool {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
+	return !s.LastPolled.Before(time.Now().Add(-3 * time.Minute))
+}
+
+// hasDoor reports whether the given door is known to the site.
+func (s *Site) hasDoor(doorID uint64) bool {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
+	_, ok := s.Doors[doorID]
+	return ok
+}
+
+// getClient returns the current HTTP client; it is safe for concurrent use
+// because the client can be replaced on authentication failures.
+func (s *Site) getClient() *http.Client {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+	return s.httpClient
+}
+
+// drainBody discards and closes a response body so the underlying
+// connection can be reused (and is not leaked on early returns).
+func drainBody(resp *http.Response) {
+	if resp == nil || resp.Body == nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
 }
 
 func (s *Site) doRequest(method string, url string, body io.Reader) (*http.Response, error) {
@@ -325,14 +379,17 @@ func (s *Site) doRequest(method string, url string, body io.Reader) (*http.Respo
 			return nil, err
 		}
 		req.Header.Set("Content-Type", JsonContentType)
-		resp, err = s.httpClient.Do(req)
+		resp, err = s.getClient().Do(req)
 		if err != nil {
 			return nil, err
 		}
 		if resp.StatusCode != http.StatusUnauthorized {
 			break
 		}
+		drainBody(resp)
+		s.clientMu.Lock()
 		s.httpClient = getHttpClient(s.clientID, s.config.Username, s.config.Password, s.BaseURL)
+		s.clientMu.Unlock()
 	}
 	return resp, err
 }
@@ -355,6 +412,7 @@ func (s *Site) ResetAntiPassback(userID int) error {
 	if err != nil {
 		return err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode != 200 {
 		return errors.New("unable to reset anti passback")
 	}
@@ -378,7 +436,13 @@ func (s *Site) DeactivateUser(userID int) error {
 func (s *Site) UpdateUserInfo(userID int, info map[string]interface{}) error {
 	info["Id"] = userID
 	if _, ok := info["ExpiryDate"]; !ok {
-		info["ExpiryDate"] = s.Users[userID].Expiry
+		s.stateLock.RLock()
+		user := s.Users[userID]
+		s.stateLock.RUnlock()
+		if user == nil {
+			return errors.New("invalid user")
+		}
+		info["ExpiryDate"] = user.Expiry
 	}
 	jsonBytes, err := json.Marshal(info)
 	if err != nil {
@@ -388,6 +452,7 @@ func (s *Site) UpdateUserInfo(userID int, info map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode != 200 {
 		s.logger.Error().Int("Status", resp.StatusCode).Msg("Unable to update user")
 		return errors.New("unable to update user info")
@@ -396,7 +461,9 @@ func (s *Site) UpdateUserInfo(userID int, info map[string]interface{}) error {
 }
 
 func (s *Site) ChangeUserDepartment(userID, departmentID int) error {
+	s.stateLock.RLock()
 	newDepartment, ok := s.Departments[departmentID]
+	s.stateLock.RUnlock()
 	if !ok {
 		return fmt.Errorf("department not found: %d", departmentID)
 	}
@@ -408,6 +475,7 @@ func (s *Site) ChangeUserDepartment(userID, departmentID int) error {
 	if err != nil {
 		return err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode != 204 {
 		s.logger.Error().Err(err).Msg("Unable to update user info")
 		return errors.New("unable to update user info")
@@ -428,6 +496,7 @@ func (s *Site) UpdateUserAccessLevels(userID int, accesslevels []int) error {
 	if err != nil {
 		return err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		s.logger.Error().Int("Status", resp.StatusCode).Msg("Unable to update user access level")
 		return errors.New("unable to update user info")
@@ -451,6 +520,8 @@ func (s *Site) SetUserAccessLevel(userID int, accesslevel int) error {
 }
 
 func (s *Site) getAccessLevelIDByName(levelName string) int {
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	for id := range s.AccessLevels {
 		if s.AccessLevels[id].Name == levelName {
 			return s.AccessLevels[id].ID
@@ -460,7 +531,13 @@ func (s *Site) getAccessLevelIDByName(levelName string) int {
 }
 
 func (s *Site) RemoveUserAccessLevel(userID int, accesslevel int) error {
-	existingLevelNames := s.Users[userID].AccessLevels
+	s.stateLock.RLock()
+	user, ok := s.Users[userID]
+	s.stateLock.RUnlock()
+	if !ok {
+		return errors.New("invalid user")
+	}
+	existingLevelNames := user.AccessLevels
 	newLevels := make([]int, 0)
 	for index := range existingLevelNames {
 		key := s.getAccessLevelIDByName(existingLevelNames[index])
@@ -472,7 +549,13 @@ func (s *Site) RemoveUserAccessLevel(userID int, accesslevel int) error {
 }
 
 func (s *Site) AddUserAccessLevel(userID int, accesslevel int) error {
-	existingLevelNames := s.Users[userID].AccessLevels
+	s.stateLock.RLock()
+	user, ok := s.Users[userID]
+	s.stateLock.RUnlock()
+	if !ok {
+		return errors.New("invalid user")
+	}
+	existingLevelNames := user.AccessLevels
 	newLevels := make([]int, 0)
 	for index := range existingLevelNames {
 		newLevels = append(newLevels, s.getAccessLevelIDByName(existingLevelNames[index]))
@@ -547,7 +630,9 @@ func (s *Site) UpdateAll() {
 		log.Info().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update Failed")
 	} else {
 		log.Debug().Str("Site", s.Name).Int64("Total (ms)", total).Msg("Full update completed")
+		s.stateLock.Lock()
 		s.LastPolled = time.Now()
+		s.stateLock.Unlock()
 	}
 }
 
@@ -615,41 +700,45 @@ func (s *Site) updateUsersWithData(query string) error {
 	if err != nil {
 		return err
 	}
+	updates := make(map[int]*User, len(data))
 	for id := range data {
-		userID := data[id].ID
-		if _, ok := s.Users[userID]; !ok {
-			s.Users[userID] = &User{}
+		user := &User{
+			GUID:              data[id].UserGUID,
+			ID:                data[id].ID,
+			FirstName:         data[id].Firstname,
+			Surname:           data[id].Surname,
+			PIN:               data[id].PIN,
+			Departments:       []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}},
+			LastKnownLocation: data[id].LastLocation,
 		}
-		s.Users[userID].ID = data[id].ID
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ActivateDate, time.Local); err == nil {
-			s.Users[userID].Activated = updatedTime
+			user.Activated = updatedTime
 		} else {
-			s.Users[userID].Activated, _ = time.Parse(""+
-				"2006-01-02", "0001-01-01")
+			user.Activated, _ = time.Parse("2006-01-02", "0001-01-01")
 		}
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].ExpiryDate, time.Local); err == nil {
-			s.Users[userID].Expiry = updatedTime
+			user.Expiry = updatedTime
 		} else {
-			s.Users[userID].Expiry, _ = time.Parse("2006-01-02", "0001-01-01")
+			user.Expiry, _ = time.Parse("2006-01-02", "0001-01-01")
 		}
-		s.Users[userID].FirstName = data[id].Firstname
-		s.Users[userID].Surname = data[id].Surname
-		s.Users[userID].PIN = data[id].PIN
-		s.Users[userID].GUID = data[id].UserGUID
 		if updatedTime, err := time.ParseInLocation("2006-01-02T15:04:05", data[id].LastAccessTime, time.Local); err == nil {
-			s.Users[userID].LastUpdated = updatedTime
+			user.LastUpdated = updatedTime
 		} else {
-			s.Users[userID].LastUpdated, _ = time.Parse("2006-01-02", "0001-01-01")
+			user.LastUpdated, _ = time.Parse("2006-01-02", "0001-01-01")
 		}
-		s.Users[userID].LastKnownLocation = data[id].LastLocation
-		s.Users[userID].Departments = []Department{{ID: data[id].DepartmentID, Name: data[id].DepartmentName}}
 		if strings.HasPrefix(data[id].AccessLevelName, "Individual: ") {
-			s.Users[userID].AccessLevels = s.getExactAccessLevel(data[id])
+			user.AccessLevels = s.getExactAccessLevel(data[id])
 		} else {
-			s.Users[userID].AccessLevels = []string{data[id].AccessLevelName}
+			user.AccessLevels = []string{data[id].AccessLevelName}
 		}
-		s.Users[userID].LocalID = data[id].LocalID
+		user.LocalID = data[id].LocalID
+		updates[user.ID] = user
 	}
+	s.stateLock.Lock()
+	for id, user := range updates {
+		s.Users[id] = user
+	}
+	s.stateLock.Unlock()
 	return nil
 }
 
@@ -673,8 +762,14 @@ func (s *Site) getExactAccessLevel(data *userSQLQuery) []string {
 		return []string{data.AccessLevelName}
 	}
 	accessLevels := make([]string, 0)
+	s.stateLock.RLock()
+	defer s.stateLock.RUnlock()
 	for index := range permissions.AccessLevels {
-		accessLevels = append(accessLevels, s.AccessLevels[permissions.AccessLevels[index]].Name)
+		if s.AccessLevels[permissions.AccessLevels[index]] != nil {
+			accessLevels = append(accessLevels, s.AccessLevels[permissions.AccessLevels[index]].Name)
+		} else {
+			log.Debug().Str("Site", s.Name).Interface("Access Level ID", permissions.AccessLevels[index]).Interface("User", data.Firstname+" "+data.Surname).Msg("Discarding invalid access level")
+		}
 	}
 	for index := range permissions.IndividualPermissions {
 		if s.AccessLevels[permissions.IndividualPermissions[index].ID] != nil {
@@ -695,7 +790,9 @@ func (s *Site) UpdateAccessLevels() error {
 	if err != nil {
 		return err
 	}
+	s.stateLock.Lock()
 	s.AccessLevels = lo.Assign(levels, areas)
+	s.stateLock.Unlock()
 	return nil
 }
 
@@ -755,16 +852,19 @@ func (s *Site) UpdateDoors() error {
 	if err != nil {
 		return err
 	}
-	s.Doors = lo.SliceToMap(doors, func(item *Door) (uint64, *Door) {
+	doorMap := lo.SliceToMap(doors, func(item *Door) (uint64, *Door) {
 		item.StatusFlag = doorStatus[int(item.ID)]
 		item.AlarmStatus = item.StatusFlag & DoorStatus_IntruderAlarm
 		return item.ID, item
 	})
 	lo.ForEach(s.config.MonitoredDoors, func(item config.MonitoredDoor, index int) {
-		if val, ok := s.Doors[uint64(item.ID)]; ok {
+		if val, ok := doorMap[uint64(item.ID)]; ok {
 			val.AlarmZone = item.Zone
 		}
 	})
+	s.stateLock.Lock()
+	s.Doors = doorMap
+	s.stateLock.Unlock()
 	return nil
 }
 
@@ -795,6 +895,7 @@ func (s *Site) getDoorStatus() (map[int]int, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer drainBody(resp)
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New("unable to pull device status'")
 	}
@@ -830,9 +931,12 @@ func (s *Site) UpdateDepartments() error {
 	if err != nil {
 		return err
 	}
-	s.Departments = lo.SliceToMap(departments, func(item *Department) (int, *Department) {
+	departmentMap := lo.SliceToMap(departments, func(item *Department) (int, *Department) {
 		return item.ID, item
 	})
+	s.stateLock.Lock()
+	s.Departments = departmentMap
+	s.stateLock.Unlock()
 	return nil
 }
 

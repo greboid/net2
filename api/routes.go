@@ -683,7 +683,7 @@ func (s *Server) setAccessLevel(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getUpToDate(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, !s.Sites.GetSite(siteID).LastPolled.Before(time.Now().Add(-1*3*time.Minute)))
+	render.JSON(w, r, s.Sites.GetSite(siteID).UpToDate())
 }
 
 func (s *Server) getUnknownTokens(w http.ResponseWriter, r *http.Request) {
