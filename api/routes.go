@@ -32,7 +32,7 @@ func (d *UpdateUserData) Bind(_ *http.Request) error {
 		return errors.New("missing required field FirstName")
 	}
 	if d.LastName == "" {
-		return errors.New("missing required field FirstName")
+		return errors.New("missing required field LastName")
 	}
 	return nil
 }
@@ -51,7 +51,6 @@ func (s *Server) GetRoutes() *chi.Mux {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(10 * time.Second))
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, MessageResponse{Error: "Resource not found"})
@@ -67,6 +66,9 @@ func (s *Server) GetRoutes() *chi.Mux {
 			r.Get("/trigger", s.update)
 		})
 		r.Route("/sites", func(r chi.Router) {
+			// The timeout is applied to the site routes only: the update
+			// endpoints can legitimately run for longer than 10 seconds.
+			r.Use(middleware.Timeout(10 * time.Second))
 			r.Get("/", s.getSites)
 			r.With(s.validateSiteID).Route("/{siteID:[0-9]+}", func(r chi.Router) {
 				r.Get("/", s.getSite)
@@ -191,7 +193,7 @@ func (s *Server) validateUserID(next http.Handler) http.Handler {
 func (s *Server) validateOpenableDoor(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-		doorName, err := url.QueryUnescape(chi.URLParam(r, "doorName"))
+		doorName, err := url.PathUnescape(chi.URLParam(r, "doorName"))
 		if err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, MessageResponse{Error: "invalid door name encoding"})
@@ -497,15 +499,15 @@ func (s *Server) activateAndUpdate(w http.ResponseWriter, r *http.Request) {
 	data := &UpdateUserData{}
 	err := render.Bind(r, data)
 	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, MessageResponse{Error: "Error activating user"})
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, MessageResponse{Error: err.Error()})
 		return
 	}
 	err = s.Sites.GetSite(siteID).UpdateUserNameAndExpiryAndAccessLevel(
 		userID,
 		data.FirstName,
 		data.LastName,
-		GetTomorrow(),
+		net2.GetTomorrow(),
 		data.AccessLevel,
 	)
 	if err != nil {
@@ -523,15 +525,15 @@ func (s *Server) deactivateAndUpdate(w http.ResponseWriter, r *http.Request) {
 	data := &UpdateUserData{}
 	err := render.Bind(r, data)
 	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, MessageResponse{Error: "Error activating user"})
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, MessageResponse{Error: err.Error()})
 		return
 	}
 	err = s.Sites.GetSite(siteID).UpdateUserNameAndExpiryAndAccessLevel(
 		userID,
 		data.FirstName,
 		data.LastName,
-		GetYesterday(),
+		net2.GetYesterday(),
 		data.AccessLevel,
 	)
 	if err != nil {
@@ -546,7 +548,7 @@ func (s *Server) deactivateAndUpdate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) extendExpiry(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
-	err := s.Sites.GetSite(siteID).UpdateUserInfo(userID, map[string]interface{}{"ExpiryDate": GetTomorrow()})
+	err := s.Sites.GetSite(siteID).UpdateUserInfo(userID, map[string]interface{}{"ExpiryDate": net2.GetTomorrow()})
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error extending user expiry"})
@@ -587,7 +589,7 @@ func (s *Server) sequenceDoors(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(bytes, &data)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to decode data for door sequence")
-		render.Status(r, http.StatusInternalServerError)
+		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "Error sequencing doors"})
 		return
 	}
@@ -600,14 +602,14 @@ func (s *Server) sequenceDoors(w http.ResponseWriter, r *http.Request) {
 		duration, err := time.ParseDuration(data[index].Time)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to decode data duration for door sequence")
-			render.Status(r, http.StatusInternalServerError)
+			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, MessageResponse{Error: "Error sequencing doors"})
 			return
 		}
 		door, err := strconv.ParseUint(data[index].Door, 0, 64)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to decode data door for door sequence")
-			render.Status(r, http.StatusInternalServerError)
+			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, MessageResponse{Error: "Error sequencing doors"})
 			return
 		}
@@ -628,7 +630,7 @@ func (s *Server) addAccessLevel(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	level, err := strconv.Atoi(r.URL.Query().Get("level"))
 	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
+		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "level needs to be numeric"})
 		return
 	}
@@ -647,7 +649,7 @@ func (s *Server) removeAccessLevel(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	level, err := strconv.Atoi(r.URL.Query().Get("level"))
 	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
+		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "level needs to be numeric"})
 		return
 	}
@@ -666,7 +668,7 @@ func (s *Server) setAccessLevel(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	level, err := strconv.Atoi(r.URL.Query().Get("level"))
 	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
+		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "level needs to be numeric"})
 		return
 	}
@@ -689,7 +691,7 @@ func (s *Server) getUpToDate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getUnknownTokens(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).UnknownTokens)
+	render.JSON(w, r, s.Sites.GetSite(siteID).GetUnknownTokens())
 }
 
 func (s *Server) changeDepartment(w http.ResponseWriter, r *http.Request) {
@@ -697,7 +699,7 @@ func (s *Server) changeDepartment(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	department, err := strconv.Atoi(r.URL.Query().Get("department"))
 	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
+		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "department needs to be numeric"})
 		return
 	}
@@ -713,7 +715,7 @@ func (s *Server) changeDepartment(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) openOpenableDoor(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	doorName, _ := url.QueryUnescape(chi.URLParam(r, "doorName"))
+	doorName, _ := url.PathUnescape(chi.URLParam(r, "doorName"))
 	openableDoors := s.Sites.GetSite(siteID).GetOpenableDoors()
 	sequence := openableDoors[doorName]
 
@@ -733,15 +735,10 @@ func (s *Server) openOpenableDoor(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, MessageResponse{Message: "Openable door sequence triggered"})
 }
 
-func GetTomorrow() time.Time {
-	now := time.Now()
-	return time.Date(now.Year(), now.Month(), now.Day()+1, 23, 59, 0, 0, time.Local)
-}
-
 func (s *Server) validateDepartmentName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-		departmentName, err := url.QueryUnescape(chi.URLParam(r, "departmentName"))
+		departmentName, err := url.PathUnescape(chi.URLParam(r, "departmentName"))
 		if err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, MessageResponse{Error: "invalid department name encoding"})
@@ -771,14 +768,14 @@ func (s *Server) validateDepartmentName(next http.Handler) http.Handler {
 
 func (s *Server) activateDepartmentUsers(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	departmentName, _ := url.QueryUnescape(chi.URLParam(r, "departmentName"))
-	
+	departmentName, _ := url.PathUnescape(chi.URLParam(r, "departmentName"))
+
 	site := s.Sites.GetSite(siteID)
 	users := site.GetUsers()
-	
+
 	var activatedCount int
 	var failedCount int
-	
+
 	for _, user := range users {
 		inDepartment := false
 		for _, dept := range user.Departments {
@@ -787,7 +784,7 @@ func (s *Server) activateDepartmentUsers(w http.ResponseWriter, r *http.Request)
 				break
 			}
 		}
-		
+
 		if inDepartment {
 			err := site.ActivateUser(user.ID)
 			if err != nil {
@@ -798,7 +795,7 @@ func (s *Server) activateDepartmentUsers(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
-	
+
 	if failedCount > 0 {
 		render.Status(r, http.StatusPartialContent)
 		render.JSON(w, r, MessageResponse{
@@ -810,9 +807,4 @@ func (s *Server) activateDepartmentUsers(w http.ResponseWriter, r *http.Request)
 			Message: fmt.Sprintf("Successfully activated %d users in department '%s'", activatedCount, departmentName),
 		})
 	}
-}
-
-func GetYesterday() time.Time {
-	now := time.Now()
-	return time.Date(now.Year(), now.Month(), now.Day()-1, 23, 59, 0, 0, time.Local)
 }
