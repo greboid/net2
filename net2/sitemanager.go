@@ -3,7 +3,6 @@ package net2
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"github.com/greboid/net2/config"
 	"github.com/rs/zerolog"
@@ -76,20 +75,34 @@ func (m *SiteManager) Start(sites []*Site) error {
 	if m.started {
 		return nil
 	}
-	m.sites = lo.SliceToMap(sites, func(item *Site) (int, *Site) {
-		return item.SiteID, item
-	})
-	log.Info().Msg("Starting sites")
-	started := 0
-	lo.ForEach(lo.Values(m.sites), func(item *Site, index int) {
-		log.Debug().Str("Site", item.Name).Msg("Starting site")
-		err := item.Start()
-		if err == nil {
-			started++
+	sitesByID := make(map[int]*Site, len(sites))
+	for _, site := range sites {
+		if _, exists := sitesByID[site.SiteID]; exists {
+			return fmt.Errorf("duplicate site id: %d", site.SiteID)
 		}
-	})
-	if started != len(m.sites) {
-		return errors.New("unable start all sites")
+		sitesByID[site.SiteID] = site
+	}
+	m.sites = sitesByID
+	log.Info().Msg("Starting sites")
+	var firstErr error
+	started := make([]*Site, 0, len(m.sites))
+	for _, site := range lo.Values(m.sites) {
+		log.Debug().Str("Site", site.Name).Msg("Starting site")
+		err := site.Start()
+		if err != nil {
+			firstErr = fmt.Errorf("unable to start site %s: %w", site.Name, err)
+			break
+		}
+		started = append(started, site)
+	}
+	if firstErr != nil {
+		// Roll back: stop the sites that did start so nothing is left
+		// running while the manager is marked as not started.
+		for _, site := range started {
+			site.Stop()
+		}
+		m.sites = nil
+		return firstErr
 	}
 	m.started = true
 	return nil
