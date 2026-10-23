@@ -23,9 +23,10 @@ jobs:
       - uses: actions/toolkit/git-checkout@master
       - uses: actions/toolkit/go-setup@master
       - name: Install C toolchain (required by the race detector)
-        run: |
-          apk upgrade --no-cache
-          apk add --no-cache gcc musl-dev
+        # musl must be named explicitly: apk caches images pin exact versions in
+        # /etc/apk/world, and naming a package rewrites its pin to the latest
+        # available version (apk upgrade alone will not move a pin).
+        run: apk add --no-cache musl gcc musl-dev
       - name: Test with race detector
         run: go test -race ./...
   container:
