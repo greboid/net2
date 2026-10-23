@@ -18,6 +18,7 @@ type SiteConfig struct {
 	IP                   string          `yaml:"ip"`
 	Port                 int             `yaml:"port,omitempty"`
 	Https                bool            `yaml:"http,omitempty"`
+	VerifyTLS            bool            `yaml:"verifyTLS,omitempty"`
 	LocalIDField         string          `yaml:"localIDField,omitempty"`
 	StaffDeptPrefix      string          `yaml:"staffDepartmentPrefix"`
 	CleanerDeptPrefix    string          `yaml:"cleaningDepartmentPrefix"`

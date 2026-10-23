@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,6 +45,42 @@ type SequenceDoorData struct {
 
 func (d *SequenceDoorData) Bind(_ *http.Request) error {
 	return nil
+}
+
+// Request-scoped values populated by the validation middleware; handlers
+// read them through the accessors below instead of re-parsing URL params.
+type contextKey int
+
+const (
+	siteContextKey contextKey = iota
+	userIDContextKey
+	doorIDContextKey
+	doorNameContextKey
+	departmentNameContextKey
+)
+
+func withValue[T any](r *http.Request, key contextKey, value T) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), key, value))
+}
+
+func (s *Server) site(r *http.Request) *net2.Site {
+	return r.Context().Value(siteContextKey).(*net2.Site)
+}
+
+func (s *Server) userID(r *http.Request) int {
+	return r.Context().Value(userIDContextKey).(int)
+}
+
+func (s *Server) doorID(r *http.Request) uint64 {
+	return r.Context().Value(doorIDContextKey).(uint64)
+}
+
+func (s *Server) doorName(r *http.Request) string {
+	return r.Context().Value(doorNameContextKey).(string)
+}
+
+func (s *Server) departmentName(r *http.Request) string {
+	return r.Context().Value(departmentNameContextKey).(string)
 }
 
 func (s *Server) GetRoutes() *chi.Mux {
@@ -145,54 +182,52 @@ func (s *Server) validateSiteID(next http.Handler) http.Handler {
 			render.JSON(w, r, MessageResponse{Error: "siteID must be numeric"})
 			return
 		}
-		if s.Sites.GetSite(siteID) == nil {
+		site := s.Sites.GetSite(siteID)
+		if site == nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, MessageResponse{Error: "siteID not found"})
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, withValue(r, siteContextKey, site))
 	})
 }
 
 func (s *Server) validateDoorID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-		doorID, err := strconv.ParseUint(chi.URLParam(r, "doorID"), 0, 64)
+		doorID, err := strconv.ParseUint(chi.URLParam(r, "doorID"), 10, 64)
 		if err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, MessageResponse{Error: "doorID must be numeric"})
 			return
 		}
-		if s.Sites.GetSite(siteID).GetDoor(doorID) == nil {
+		if s.site(r).GetDoor(doorID) == nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, MessageResponse{Error: "doorID not found"})
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, withValue(r, doorIDContextKey, doorID))
 	})
 }
 
 func (s *Server) validateUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-		userID, err := strconv.Atoi(chi.URLParam(r, "userID"))
+		uid, err := strconv.Atoi(chi.URLParam(r, "userID"))
 		if err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, MessageResponse{Error: "userID must be numeric"})
 			return
 		}
-		if s.Sites.GetSite(siteID).GetUser(userID) == nil {
+		if s.site(r).GetUser(uid) == nil {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, MessageResponse{Error: "userID not found"})
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, withValue(r, userIDContextKey, uid))
 	})
 }
 
 func (s *Server) validateOpenableDoor(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 		doorName, err := url.PathUnescape(chi.URLParam(r, "doorName"))
 		if err != nil {
 			render.Status(r, http.StatusBadRequest)
@@ -204,13 +239,12 @@ func (s *Server) validateOpenableDoor(next http.Handler) http.Handler {
 			render.JSON(w, r, MessageResponse{Error: "doorName is required"})
 			return
 		}
-		openableDoors := s.Sites.GetSite(siteID).GetOpenableDoors()
-		if _, exists := openableDoors[doorName]; !exists {
+		if _, exists := s.site(r).GetOpenableDoors()[doorName]; !exists {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, MessageResponse{Error: "openable door not found"})
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, withValue(r, doorNameContextKey, doorName))
 	})
 }
 
@@ -220,22 +254,17 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getUsers(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetUsers())
+	render.JSON(w, r, s.site(r).GetUsers())
 }
 
 func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetUser(userID))
+	render.JSON(w, r, s.site(r).GetUser(s.userID(r)))
 }
 
 func (s *Server) getUserPicture(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
-	picture, err := s.Sites.GetSite(siteID).GetUserPicture(userID)
+	picture, err := s.site(r).GetUserPicture(s.userID(r))
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, MessageResponse{Error: "Error getting picture"})
@@ -248,9 +277,8 @@ func (s *Server) getUserPicture(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getUserPictureByLocalID(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	localID, _ := strconv.Atoi(chi.URLParam(r, "localID"))
-	picture, err := s.Sites.GetSite(siteID).GetUserPictureByLocalID(localID)
+	picture, err := s.site(r).GetUserPictureByLocalID(localID)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, MessageResponse{Error: "Error getting picture"})
@@ -263,8 +291,7 @@ func (s *Server) getUserPictureByLocalID(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) getBlankPicture(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	picture, err := s.Sites.GetSite(siteID).GetBlankPicture()
+	picture, err := s.site(r).GetBlankPicture()
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, MessageResponse{Error: "Error getting picture"})
@@ -282,118 +309,97 @@ func (s *Server) getSites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getSite(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID))
+	render.JSON(w, r, s.site(r))
 }
 
 func (s *Server) getActiveStaffToday(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetActiveStaffToday())
+	render.JSON(w, r, s.site(r).GetActiveStaffToday())
 }
 
 func (s *Server) getActiveStaff(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetActiveStaff())
+	render.JSON(w, r, s.site(r).GetActiveStaff())
 }
 
 func (s *Server) getActiveVisitors(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetActiveVisitors())
+	render.JSON(w, r, s.site(r).GetActiveVisitors())
 }
 
 func (s *Server) getActiveVisitorsToday(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetActiveVisitorsToday())
+	render.JSON(w, r, s.site(r).GetActiveVisitorsToday())
 }
 
 func (s *Server) getActiveNonStaff(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetActiveNonStaff())
+	render.JSON(w, r, s.site(r).GetActiveNonStaff())
 }
 
 func (s *Server) getActiveUsersToday(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetActiveUsersToday())
+	render.JSON(w, r, s.site(r).GetActiveUsersToday())
 }
 
 func (s *Server) getActiveUsers(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetActiveUsers())
+	render.JSON(w, r, s.site(r).GetActiveUsers())
 }
 
 func (s *Server) getCancelledUsers(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetCancelledUsers())
+	render.JSON(w, r, s.site(r).GetCancelledUsers())
 }
 
 func (s *Server) getVisitors(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetVisitors())
+	render.JSON(w, r, s.site(r).GetVisitors())
 }
 
 func (s *Server) getContractors(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetContractors())
+	render.JSON(w, r, s.site(r).GetContractors())
 }
 
 func (s *Server) getCleaners(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetCleaners())
+	render.JSON(w, r, s.site(r).GetCleaners())
 }
 
 func (s *Server) getCustomers(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetCustomers())
+	render.JSON(w, r, s.site(r).GetCustomers())
 }
 
 func (s *Server) getStaff(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetStaff())
+	render.JSON(w, r, s.site(r).GetStaff())
 }
 
 func (s *Server) getDoors(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetDoors())
+	render.JSON(w, r, s.site(r).GetDoors())
 }
 
 func (s *Server) getMonitoredDoors(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetMonitoredDoors())
+	render.JSON(w, r, s.site(r).GetMonitoredDoors())
 }
 
 func (s *Server) getOpenableDoors(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetOpenableDoors())
+	render.JSON(w, r, s.site(r).GetOpenableDoors())
 }
 
 func (s *Server) getDoor(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	doorID, _ := strconv.Atoi(chi.URLParam(r, "doorID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetDoor(uint64(doorID)))
+	render.JSON(w, r, s.site(r).GetDoor(s.doorID(r)))
 }
 
 func (s *Server) openDoor(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	doorID, _ := strconv.Atoi(chi.URLParam(r, "doorID"))
-	err := s.Sites.GetSite(siteID).OpenDoor(uint64(doorID))
+	err := s.site(r).OpenDoor(s.doorID(r))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error opening door"})
@@ -404,9 +410,7 @@ func (s *Server) openDoor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) relay1(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	doorID, _ := strconv.Atoi(chi.URLParam(r, "doorID"))
-	err := s.Sites.GetSite(siteID).OpenDoorWithRelay(uint64(doorID), false)
+	err := s.site(r).OpenDoorWithRelay(s.doorID(r), false)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error opening door"})
@@ -417,9 +421,7 @@ func (s *Server) relay1(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) relay2(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	doorID, _ := strconv.Atoi(chi.URLParam(r, "doorID"))
-	err := s.Sites.GetSite(siteID).OpenDoorWithRelay(uint64(doorID), true)
+	err := s.site(r).OpenDoorWithRelay(s.doorID(r), true)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error opening door"})
@@ -430,9 +432,7 @@ func (s *Server) relay2(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) closeDoor(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	doorID, _ := strconv.Atoi(chi.URLParam(r, "doorID"))
-	err := s.Sites.GetSite(siteID).CloseDoor(uint64(doorID))
+	err := s.site(r).CloseDoor(s.doorID(r))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error closing door"})
@@ -443,9 +443,7 @@ func (s *Server) closeDoor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) resetAntiPassback(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
-	err := s.Sites.GetSite(siteID).ResetAntiPassback(userID)
+	err := s.site(r).ResetAntiPassback(s.userID(r))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error resetting anti passback"})
@@ -456,21 +454,17 @@ func (s *Server) resetAntiPassback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getAccessLevels(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetAccessLevels())
+	render.JSON(w, r, s.site(r).GetAccessLevels())
 }
 
 func (s *Server) getDepartments(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetDepartments())
+	render.JSON(w, r, s.site(r).GetDepartments())
 }
 
 func (s *Server) activateUser(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
-	err := s.Sites.GetSite(siteID).ActivateUser(userID)
+	err := s.site(r).ActivateUser(s.userID(r))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error activating user"})
@@ -481,9 +475,7 @@ func (s *Server) activateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deactivateUser(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
-	err := s.Sites.GetSite(siteID).DeactivateUser(userID)
+	err := s.site(r).DeactivateUser(s.userID(r))
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error deactivating user"})
@@ -494,8 +486,6 @@ func (s *Server) deactivateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) activateAndUpdate(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	data := &UpdateUserData{}
 	err := render.Bind(r, data)
 	if err != nil {
@@ -503,8 +493,8 @@ func (s *Server) activateAndUpdate(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, MessageResponse{Error: err.Error()})
 		return
 	}
-	err = s.Sites.GetSite(siteID).UpdateUserNameAndExpiryAndAccessLevel(
-		userID,
+	err = s.site(r).UpdateUserNameAndExpiryAndAccessLevel(
+		s.userID(r),
 		data.FirstName,
 		data.LastName,
 		net2.GetTomorrow(),
@@ -520,8 +510,6 @@ func (s *Server) activateAndUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deactivateAndUpdate(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	data := &UpdateUserData{}
 	err := render.Bind(r, data)
 	if err != nil {
@@ -529,8 +517,8 @@ func (s *Server) deactivateAndUpdate(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, MessageResponse{Error: err.Error()})
 		return
 	}
-	err = s.Sites.GetSite(siteID).UpdateUserNameAndExpiryAndAccessLevel(
-		userID,
+	err = s.site(r).UpdateUserNameAndExpiryAndAccessLevel(
+		s.userID(r),
 		data.FirstName,
 		data.LastName,
 		net2.GetYesterday(),
@@ -546,9 +534,7 @@ func (s *Server) deactivateAndUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) extendExpiry(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
-	err := s.Sites.GetSite(siteID).UpdateUserInfo(userID, map[string]interface{}{"ExpiryDate": net2.GetTomorrow()})
+	err := s.site(r).UpdateUserInfo(s.userID(r), map[string]any{"ExpiryDate": net2.GetTomorrow()})
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "Error extending user expiry"})
@@ -573,7 +559,6 @@ func (s *Server) updateNow(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) sequenceDoors(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	bytes, err := io.ReadAll(r.Body)
 	defer func() {
 		_ = r.Body.Close()
@@ -618,23 +603,22 @@ func (s *Server) sequenceDoors(w http.ResponseWriter, r *http.Request) {
 			Time: duration,
 		})
 	}
+	site := s.site(r)
 	go func() {
-		s.Sites.GetSite(siteID).SequenceDoor(doors...)
+		site.SequenceDoor(doors...)
 	}()
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, MessageResponse{Message: "Sequence triggered"})
 }
 
 func (s *Server) addAccessLevel(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	level, err := strconv.Atoi(r.URL.Query().Get("level"))
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "level needs to be numeric"})
 		return
 	}
-	err = s.Sites.GetSite(siteID).AddUserAccessLevel(userID, level)
+	err = s.site(r).AddUserAccessLevel(s.userID(r), level)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "error adding access level"})
@@ -645,15 +629,13 @@ func (s *Server) addAccessLevel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) removeAccessLevel(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	level, err := strconv.Atoi(r.URL.Query().Get("level"))
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "level needs to be numeric"})
 		return
 	}
-	err = s.Sites.GetSite(siteID).RemoveUserAccessLevel(userID, level)
+	err = s.site(r).RemoveUserAccessLevel(s.userID(r), level)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "error removing access level"})
@@ -664,15 +646,13 @@ func (s *Server) removeAccessLevel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) setAccessLevel(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	level, err := strconv.Atoi(r.URL.Query().Get("level"))
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "level needs to be numeric"})
 		return
 	}
-	err = s.Sites.GetSite(siteID).SetUserAccessLevel(userID, level)
+	err = s.site(r).SetUserAccessLevel(s.userID(r), level)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "error setting access level"})
@@ -683,27 +663,23 @@ func (s *Server) setAccessLevel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getUpToDate(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).UpToDate())
+	render.JSON(w, r, s.site(r).UpToDate())
 }
 
 func (s *Server) getUnknownTokens(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, s.Sites.GetSite(siteID).GetUnknownTokens())
+	render.JSON(w, r, s.site(r).GetUnknownTokens())
 }
 
 func (s *Server) changeDepartment(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	userID, _ := strconv.Atoi(chi.URLParam(r, "userID"))
 	department, err := strconv.Atoi(r.URL.Query().Get("department"))
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, MessageResponse{Error: "department needs to be numeric"})
 		return
 	}
-	err = s.Sites.GetSite(siteID).ChangeUserDepartment(userID, department)
+	err = s.site(r).ChangeUserDepartment(s.userID(r), department)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, MessageResponse{Error: "error changing user department"})
@@ -714,10 +690,8 @@ func (s *Server) changeDepartment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) openOpenableDoor(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	doorName, _ := url.PathUnescape(chi.URLParam(r, "doorName"))
-	openableDoors := s.Sites.GetSite(siteID).GetOpenableDoors()
-	sequence := openableDoors[doorName]
+	site := s.site(r)
+	sequence := site.GetOpenableDoors()[s.doorName(r)]
 
 	var doors []net2.DoorSequenceItem
 	for _, item := range sequence {
@@ -728,7 +702,7 @@ func (s *Server) openOpenableDoor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		s.Sites.GetSite(siteID).SequenceDoor(doors...)
+		site.SequenceDoor(doors...)
 	}()
 
 	render.Status(r, http.StatusOK)
@@ -737,7 +711,6 @@ func (s *Server) openOpenableDoor(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) validateDepartmentName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
 		departmentName, err := url.PathUnescape(chi.URLParam(r, "departmentName"))
 		if err != nil {
 			render.Status(r, http.StatusBadRequest)
@@ -749,9 +722,8 @@ func (s *Server) validateDepartmentName(next http.Handler) http.Handler {
 			render.JSON(w, r, MessageResponse{Error: "departmentName is required"})
 			return
 		}
-		departments := s.Sites.GetSite(siteID).GetDepartments()
 		found := false
-		for _, dept := range departments {
+		for _, dept := range s.site(r).GetDepartments() {
 			if dept.Name == departmentName {
 				found = true
 				break
@@ -762,15 +734,13 @@ func (s *Server) validateDepartmentName(next http.Handler) http.Handler {
 			render.JSON(w, r, MessageResponse{Error: "department not found"})
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, withValue(r, departmentNameContextKey, departmentName))
 	})
 }
 
 func (s *Server) activateDepartmentUsers(w http.ResponseWriter, r *http.Request) {
-	siteID, _ := strconv.Atoi(chi.URLParam(r, "siteID"))
-	departmentName, _ := url.PathUnescape(chi.URLParam(r, "departmentName"))
-
-	site := s.Sites.GetSite(siteID)
+	departmentName := s.departmentName(r)
+	site := s.site(r)
 	users := site.GetUsers()
 
 	var activatedCount int

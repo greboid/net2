@@ -14,7 +14,7 @@ import (
 // TestDoRequestReplaysBodyAfter401 verifies that a request retried after an
 // authentication failure carries the same body as the original attempt.
 func TestDoRequestReplaysBodyAfter401(t *testing.T) {
-	var attempts int32
+	var attempts atomic.Int32
 	var bodies []string
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/authorization/tokens", func(w http.ResponseWriter, _ *http.Request) {
@@ -24,7 +24,7 @@ func TestDoRequestReplaysBodyAfter401(t *testing.T) {
 	mux.HandleFunc("/api/v1/commands/door/open", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		bodies = append(bodies, string(body))
-		if atomic.AddInt32(&attempts, 1) == 1 {
+		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -92,5 +92,62 @@ func TestMarshalJSONShape(t *testing.T) {
 	expected := `{"ID":3,"Name":"HQ","lastPolled":"0001-01-01T00:00:00Z"}`
 	if string(data) != expected {
 		t.Errorf("unexpected JSON: got %s, want %s", data, expected)
+	}
+}
+
+func newLocalIDFieldSite(t *testing.T, handler func(w http.ResponseWriter, _ *http.Request)) *Site {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/users/customfieldnames", handler)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	logger := zerolog.New(io.Discard)
+	return &Site{
+		BaseURL:          srv.URL,
+		httpClient:       srv.Client(),
+		Name:             "LocalID",
+		logger:           &logger,
+		localIDFieldName: "StaffID",
+	}
+}
+
+// TestStartFailsWhenCustomFieldsUnavailable ensures startup fails fast when
+// the custom field names cannot be fetched; an unresolved local ID field
+// would make every user query invalid SQL.
+func TestStartFailsWhenCustomFieldsUnavailable(t *testing.T) {
+	site := newLocalIDFieldSite(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	if err := site.Start(); err == nil {
+		t.Fatal("expected Start to fail when custom fields cannot be fetched, got nil")
+	}
+	if site.LocalIDField != "" {
+		t.Errorf("expected LocalIDField to stay empty, got %q", site.LocalIDField)
+	}
+}
+
+// TestStartFailsWhenLocalIDFieldMissing ensures a configured field that the
+// Net2 server does not offer is a startup error, not silent empty queries.
+func TestStartFailsWhenLocalIDFieldMissing(t *testing.T) {
+	site := newLocalIDFieldSite(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"id":1,"name":"OtherField","type":0,"maxLength":50}]`))
+	})
+	if err := site.Start(); err == nil {
+		t.Fatal("expected Start to fail when the configured field is absent, got nil")
+	}
+}
+
+// TestStartResolvesLocalIDField checks the successful path publishes the
+// resolved query-field identifier.
+func TestStartResolvesLocalIDField(t *testing.T) {
+	site := newLocalIDFieldSite(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"id":1,"name":"StaffID","type":0,"maxLength":50}]`))
+	})
+	if err := site.Start(); err != nil {
+		t.Fatalf("expected Start to succeed, got %v", err)
+	}
+	t.Cleanup(site.Stop)
+	if site.LocalIDField != "Field1_100" {
+		t.Errorf("expected LocalIDField Field1_100, got %q", site.LocalIDField)
 	}
 }

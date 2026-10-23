@@ -35,7 +35,11 @@ func (s *Site) Start() error {
 	s.AccessLevels = make(map[int]*AccessLevel)
 	s.Doors = make(map[uint64]*Door)
 	s.stateLock.Unlock()
-	s.LocalIDField = s.getLocalFieldName()
+	localIDField, err := s.getLocalFieldName()
+	if err != nil {
+		return fmt.Errorf("unable to resolve local ID field %q: %w", s.localIDFieldName, err)
+	}
+	s.LocalIDField = localIDField
 	if s.cron == nil {
 		cron, err := gocron.NewScheduler(gocron.WithLocation(time.Now().Location()))
 		if err != nil {
@@ -43,7 +47,7 @@ func (s *Site) Start() error {
 		}
 		s.cron = cron
 	}
-	_, err := s.cron.NewJob(
+	_, err = s.cron.NewJob(
 		gocron.DurationJob(time.Minute),
 		gocron.NewTask(func() {
 			s.UpdateAll()
@@ -159,7 +163,7 @@ func (s *Site) GetTodaysActiveUsersInDepartment(match func(test Department) bool
 	return s.GetUsersInDepartment(match, func(test *User) bool { return test.LastUpdated.After(midnight) })
 }
 
-func (s *Site) GetCancelledUsers() interface{} {
+func (s *Site) GetCancelledUsers() any {
 	return s.GetUsersInDepartment(func(test Department) bool { return strings.HasPrefix(test.Name, s.config.CancelledDeptPrefix) }, func(test *User) bool { return true })
 }
 
@@ -284,7 +288,7 @@ func (s *Site) OpenDoor(doorID uint64) error {
 	}
 	defer drainBody(resp)
 	if resp.StatusCode != 200 {
-		log.Error().Int("Status", resp.StatusCode).Msg("Unable to close door")
+		log.Error().Int("Status", resp.StatusCode).Msg("Unable to open door")
 		return errors.New("unable to open door")
 	}
 	return nil
@@ -297,9 +301,9 @@ func (s *Site) OpenDoorWithRelay(doorID uint64, secondRelay bool) error {
 	} else {
 		relay = "Relay1"
 	}
-	jsonBytes, _ := json.Marshal(map[string]interface{}{
+	jsonBytes, _ := json.Marshal(map[string]any{
 		"doorId": doorID,
-		"RelayFunction": map[string]interface{}{
+		"RelayFunction": map[string]any{
 			"RelayId":       relay,
 			"RelayAction":   "TimedOpen",
 			"RelayOpenTime": 1000,
@@ -314,7 +318,7 @@ func (s *Site) OpenDoorWithRelay(doorID uint64, secondRelay bool) error {
 	}
 	defer drainBody(resp)
 	if resp.StatusCode != 200 {
-		log.Error().Int("Status", resp.StatusCode).Msg("Unable to close door")
+		log.Error().Int("Status", resp.StatusCode).Msg("Unable to open door")
 		return errors.New("unable to open door")
 	}
 	return nil
@@ -416,7 +420,7 @@ func (s *Site) doRequest(method string, url string, body io.Reader) (*http.Respo
 		}
 		drainBody(resp)
 		s.clientMu.Lock()
-		s.httpClient = getHttpClient(s.clientID, s.config.Username, s.config.Password, s.BaseURL)
+		s.httpClient = getHttpClient(s.clientID, s.config.Username, s.config.Password, s.BaseURL, s.config.VerifyTLS)
 		s.clientMu.Unlock()
 	}
 	return resp, err
@@ -448,18 +452,18 @@ func (s *Site) ResetAntiPassback(userID int) error {
 }
 
 func (s *Site) ActivateUser(userID int) error {
-	return s.UpdateUserInfo(userID, map[string]interface{}{
+	return s.UpdateUserInfo(userID, map[string]any{
 		"ExpiryDate": GetTomorrow(),
 	})
 }
 
 func (s *Site) DeactivateUser(userID int) error {
-	return s.UpdateUserInfo(userID, map[string]interface{}{
+	return s.UpdateUserInfo(userID, map[string]any{
 		"ExpiryDate": GetYesterday(),
 	})
 }
 
-func (s *Site) UpdateUserInfo(userID int, info map[string]interface{}) error {
+func (s *Site) UpdateUserInfo(userID int, info map[string]any) error {
 	info["Id"] = userID
 	if _, ok := info["ExpiryDate"]; !ok {
 		s.stateLock.RLock()
@@ -503,8 +507,8 @@ func (s *Site) ChangeUserDepartment(userID, departmentID int) error {
 	}
 	defer drainBody(resp)
 	if resp.StatusCode != 204 {
-		s.logger.Error().Err(err).Msg("Unable to update user info")
-		return errors.New("unable to update user info")
+		s.logger.Error().Int("Status", resp.StatusCode).Msg("Unable to update user department")
+		return errors.New("unable to update user department")
 	}
 	return s.UpdateUser(userID)
 }
@@ -601,7 +605,7 @@ func (s *Site) SequenceDoor(items ...DoorSequenceItem) {
 }
 
 func (s *Site) UpdateUserNameAndExpiryAndAccessLevel(userid int, firstname string, surname string, expiry time.Time, level int) error {
-	err := s.UpdateUserInfo(userid, map[string]interface{}{
+	err := s.UpdateUserInfo(userid, map[string]any{
 		"FirstName":  firstname,
 		"LastName":   surname,
 		"ExpiryDate": expiry,
@@ -662,42 +666,43 @@ func (s *Site) UpdateAll() {
 	}
 }
 
-func (s *Site) getLocalFieldName() string {
+// getLocalFieldName resolves the configured local ID field name to the
+// Net2 query-field identifier used in user queries; without it every user
+// query would be invalid SQL, so callers must treat failure as fatal.
+func (s *Site) getLocalFieldName() (string, error) {
+	if s.localIDFieldName == "" {
+		return "", errors.New("local ID field name is not configured")
+	}
 	resp, err := s.doGet(fmt.Sprintf("%s%s", s.BaseURL, "/api/v1/users/customfieldnames"))
 	if err != nil {
-		return ""
+		return "", err
 	}
-	bodyData, _ := io.ReadAll(resp.Body)
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer drainBody(resp)
+	bodyData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
 	if resp.StatusCode != http.StatusOK {
 		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to get custom fields")
-		return ""
+		return "", fmt.Errorf("custom field names request failed with status %d", resp.StatusCode)
 	}
-	fields := make([]*CustomFieldDefinition, 20)
-	err = json.Unmarshal(bodyData, &fields)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to unmarshall custom fields")
-		return ""
-	}
-	if s.localIDFieldName == "" {
-		return ""
+	fields := []*CustomFieldDefinition{}
+	if err := json.Unmarshal(bodyData, &fields); err != nil {
+		return "", fmt.Errorf("unable to unmarshal custom fields: %w", err)
 	}
 	for index := range fields {
 		if fields[index].Name == s.localIDFieldName {
 			if fields[index].ID == 1 || fields[index].ID == 2 {
-				return fmt.Sprintf("%s%d_%s", "Field", fields[index].ID, "100")
+				return fmt.Sprintf("%s%d_%s", "Field", fields[index].ID, "100"), nil
 			} else if fields[index].ID == 6 || fields[index].ID == 7 {
-				return fmt.Sprintf("%s%d_%s", "Field", fields[index].ID, "60")
+				return fmt.Sprintf("%s%d_%s", "Field", fields[index].ID, "60"), nil
 			} else if fields[index].ID == 13 {
-				return fmt.Sprintf("%s%d_%s", "Field", fields[index].ID, "Memo")
-			} else {
-				return fmt.Sprintf("%s%d_%s", "Field", fields[index].ID, "50")
+				return fmt.Sprintf("%s%d_%s", "Field", fields[index].ID, "Memo"), nil
 			}
+			return fmt.Sprintf("%s%d_%s", "Field", fields[index].ID, "50"), nil
 		}
 	}
-	return ""
+	return "", fmt.Errorf("local ID field %q not found in Net2 custom fields", s.localIDFieldName)
 }
 
 func (s *Site) UpdateUser(userID int) error {
@@ -721,7 +726,7 @@ func (s *Site) updateUsersWithData(query string) error {
 		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull users")
 		return errors.New("unable to update user info")
 	}
-	data := make([]*userSQLQuery, 0)
+	data := []*userSQLQuery{}
 	err = json.Unmarshal(bodyData, &data)
 	if err != nil {
 		return err
@@ -837,7 +842,7 @@ func (s *Site) updateLevels() (map[int]*AccessLevel, error) {
 		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull access levels")
 		return nil, errors.New("unable to pull access levels")
 	}
-	accesslevels := make([]*AccessLevel, 50)
+	accesslevels := []*AccessLevel{}
 	err = json.Unmarshal(bodyData, &accesslevels)
 	if err != nil {
 		return nil, err
@@ -860,7 +865,7 @@ func (s *Site) updateAreas() (map[int]*AccessLevel, error) {
 		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull access levels")
 		return nil, errors.New("unable to pull access levels")
 	}
-	accesslevels := make([]*Area, 50)
+	accesslevels := []*Area{}
 	err = json.Unmarshal(bodyData, &accesslevels)
 	if err != nil {
 		return nil, err
@@ -909,7 +914,7 @@ func (s *Site) getDoors() ([]*Door, error) {
 		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to pull doors")
 		return nil, errors.New("unable to pull doors")
 	}
-	doorSlice := make([]*Door, 50)
+	doorSlice := []*Door{}
 	err = json.Unmarshal(bodyData, &doorSlice)
 	if err != nil {
 		return nil, err
@@ -931,7 +936,7 @@ func (s *Site) getDoorStatus() (map[int]int, error) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	sqlMap := make([]*deviceSQLQuery, 0)
+	sqlMap := []*deviceSQLQuery{}
 	err = json.Unmarshal(bodyData, &sqlMap)
 	if err != nil {
 		return nil, err
@@ -954,7 +959,7 @@ func (s *Site) UpdateDepartments() error {
 		s.logger.Error().Int("Status", resp.StatusCode).Str("URL", resp.Request.URL.String()).Msg("Unable to update doors")
 		return errors.New("unable to update doors")
 	}
-	departments := make([]*Department, 50)
+	departments := []*Department{}
 	err = json.Unmarshal(bodyData, &departments)
 	if err != nil {
 		return err

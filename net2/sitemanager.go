@@ -27,7 +27,7 @@ func GetSites(conf *config.Config, logger *zerolog.Logger) []*Site {
 		}
 		sites = append(sites, &Site{
 			config:           &conf.Sites[index],
-			httpClient:       getHttpClient(conf.ClientID, conf.Sites[index].Username, conf.Sites[index].Password, baseURL),
+			httpClient:       getHttpClient(conf.ClientID, conf.Sites[index].Username, conf.Sites[index].Password, baseURL, conf.Sites[index].VerifyTLS),
 			clientID:         conf.ClientID,
 			QuitChan:         make(chan bool),
 			BaseURL:          baseURL,
@@ -41,7 +41,12 @@ func GetSites(conf *config.Config, logger *zerolog.Logger) []*Site {
 	return sites
 }
 
-func getHttpClient(clientID string, username string, password string, baseURL string) *http.Client {
+// outboundTimeout bounds each request to a Net2 server (including token
+// fetches) so a hung connection fails instead of blocking the update loop
+// indefinitely.
+const outboundTimeout = 30 * time.Second
+
+func getHttpClient(clientID string, username string, password string, baseURL string, verifyTLS bool) *http.Client {
 	oauthConfig := clientcredentials.Config{
 		ClientID: clientID,
 		TokenURL: fmt.Sprintf("%s/api/v1/authorization/tokens", baseURL),
@@ -52,13 +57,16 @@ func getHttpClient(clientID string, username string, password string, baseURL st
 			"scope":      {"offline_access"},
 		},
 	}
+	// Net2 serves self-signed certificates by default, so certificate
+	// verification is opt-in per site via verifyTLS.
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: !verifyTLS},
 	}
-	sslcli := &http.Client{Transport: tr}
+	sslcli := &http.Client{Transport: tr, Timeout: outboundTimeout}
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, sslcli)
 	httpClient := oauth2.NewClient(ctx, oauthConfig.TokenSource(ctx))
+	httpClient.Timeout = outboundTimeout
 	return httpClient
 }
 

@@ -91,3 +91,35 @@ sites:
 		t.Error("expected http: true to enable https")
 	}
 }
+
+// Net2 serves self-signed certificates by default, so TLS verification is
+// off unless a site sets verifyTLS: true.
+func TestLoadConfigVerifyTLS(t *testing.T) {
+	path := writeConfig(t, `
+clientid: abc
+sites:
+  - id: 1
+    name: SiteA
+    ip: 1.2.3.4
+    username: u
+    password: p
+    localIDField: Field1
+  - id: 2
+    name: SiteB
+    ip: 1.2.3.4
+    verifyTLS: true
+    username: u
+    password: p
+    localIDField: Field1
+`)
+	config, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("expected config to load, got %v", err)
+	}
+	if config.Sites[0].VerifyTLS {
+		t.Error("expected verifyTLS to default to false")
+	}
+	if !config.Sites[1].VerifyTLS {
+		t.Error("expected verifyTLS: true to be parsed")
+	}
+}

@@ -12,7 +12,7 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(time.Duration(*d).String())
 }
 
-func (d *Duration) MarshalYAML() (interface{}, error) {
+func (d *Duration) MarshalYAML() (any, error) {
 	return time.Duration(*d).String(), nil
 }
 

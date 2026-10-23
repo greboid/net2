@@ -54,6 +54,7 @@ sites:
     ip: <IP Address or hostname of the net2 server>
     port: <Port of the net2 API, defaults to 8080, optional>
     http: <Set to true to connect over plain HTTP, HTTPS is the default, optional>
+    verifyTLS: <Set to true to verify the server TLS certificate, self-signed certificates are accepted by default, optional>
     username: <Net2 Operator username>
     password: <Net2 Operator password>
     staffDepartmentPrefix: Staff
