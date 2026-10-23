@@ -23,7 +23,9 @@ jobs:
       - uses: actions/toolkit/git-checkout@master
       - uses: actions/toolkit/go-setup@master
       - name: Install C toolchain (required by the race detector)
-        run: apk add --no-cache --upgrade gcc musl-dev
+        run: |
+          apk upgrade --no-cache
+          apk add --no-cache gcc musl-dev
       - name: Test with race detector
         run: go test -race ./...
   container:
