@@ -35,7 +35,61 @@ func newTestSite(t *testing.T) *Site {
 	mux.HandleFunc("/api/v1/accesslevels", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(testLevelsJSON)) })
 	mux.HandleFunc("/api/v1/departments", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(testDepartmentsJSON)) })
 	mux.HandleFunc("/api/v1/users/customfieldnames", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(testCustomFieldsJSON)) })
-	mux.HandleFunc("/api/v1/users/1/doorpermissionset", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(testPermissionJSON)) })
+	mux.HandleFunc("/api/v1/users/1/doorpermissionset", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			body, _ := io.ReadAll(r.Body)
+			if strings.Contains(string(body), "9999") {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		_, _ = w.Write([]byte(testPermissionJSON))
+	})
+	mux.HandleFunc("/api/v1/commands/door/open", newDoorCommandHandler(false))
+	mux.HandleFunc("/api/v1/commands/door/close", newDoorCommandHandler(true))
+	// The relay control endpoint also fails for door 42 so the non-200
+	// branches of OpenDoorWithRelay and CloseDoor can be exercised.
+	mux.HandleFunc("/api/v1/commands/door/control", newDoorCommandHandler(true))
+	mux.HandleFunc("/api/v1/commands/antipassback/reset", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), "998") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/api/v1/users/", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/image") && r.Method == http.MethodGet:
+			if strings.HasSuffix(r.URL.Path, "/users/8/image") {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			if strings.HasSuffix(r.URL.Path, "/users/998/image") {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte("jpegbytes"))
+		case strings.HasSuffix(r.URL.Path, "/departments") && r.Method == http.MethodPut:
+			if strings.Contains(r.URL.Path, "/users/998/") {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPut:
+			if strings.Contains(string(body), "998") {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
 	mux.HandleFunc("/api/v1/customquery/querydb", func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query().Get("query")
 		switch {
@@ -47,8 +101,7 @@ func newTestSite(t *testing.T) *Site {
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
+	srv := httptest.NewTestServer(t, mux)
 
 	logger := zerolog.New(io.Discard)
 	site := &Site{
@@ -69,6 +122,24 @@ func newTestSite(t *testing.T) *Site {
 	return site
 }
 
+// newDoorCommandHandler simulates a Net2 door command endpoint. Door 999 is
+// an "invalid" door that always fails; when failDoor42 is set, door 42 also
+// fails so non-200 error branches can be exercised.
+func newDoorCommandHandler(failDoor42 bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), "999") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if failDoor42 && strings.Contains(string(body), "42") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 // TestConcurrentUpdateAndReads hammers the state readers while the update
 // loop replaces the published maps; run with -race to verify the locking.
 func TestConcurrentUpdateAndReads(t *testing.T) {
@@ -76,10 +147,7 @@ func TestConcurrentUpdateAndReads(t *testing.T) {
 
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case <-stop:
@@ -88,10 +156,9 @@ func TestConcurrentUpdateAndReads(t *testing.T) {
 				site.UpdateAll()
 			}
 		}
-	}()
+	})
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case <-stop:
@@ -112,7 +179,7 @@ func TestConcurrentUpdateAndReads(t *testing.T) {
 				_ = site.RemoveUserAccessLevel(1, 1)
 			}
 		}
-	}()
+	})
 
 	time.Sleep(500 * time.Millisecond)
 	close(stop)
