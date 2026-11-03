@@ -6,7 +6,7 @@ require (
 	github.com/csmith/envflag/v2 v2.0.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/render v1.0.3
-	github.com/go-co-op/gocron/v2 v2.22.0
+	github.com/go-co-op/gocron/v2 v2.23.0
 	github.com/rs/zerolog v1.35.1
 	github.com/samber/lo v1.53.0
 	golang.org/x/oauth2 v0.37.0
@@ -25,4 +25,5 @@ require (
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
